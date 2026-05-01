@@ -1,7 +1,6 @@
 import os
 import json
 import asyncio
-import subprocess
 import random
 import requests
 import base64
@@ -13,10 +12,12 @@ from telethon.sessions import StringSession
 API_ID = 31650696
 API_HASH = '2829d6502df68cd12fab33cabf2851d2'
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN') # لازم تضيفه في Railway
-GITHUB_USERNAME = 'nashrmsnah-art' # غيره ليوزر جيتهاب بتاعك
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+RAILWAY_TOKEN = os.getenv('RAILWAY_TOKEN')
+GITHUB_USERNAME = 'nashrmsnah-art' # يوزر جيتهاب بتاعك
 ADMIN_ID = 154919127
 DB_FILE = 'database.json'
+BOT_PRICE = 10 # سعر الكود
 
 bot = TelegramClient('factory', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
@@ -25,7 +26,7 @@ def load_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, 'r') as f:
             return json.load(f)
-    return {'codes': {}, 'used_codes': [], 'bots': {}}
+    return {'codes': {}, 'used_codes': [], 'bots': {}, 'pending_bots': {}, 'waiting_for': {}}
 
 def save_db():
     with open(DB_FILE, 'w') as f:
@@ -39,12 +40,11 @@ async def gen_code(event):
     if event.sender_id!= ADMIN_ID:
         return
 
-    # توليد كود عشوائي
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-    db['codes'][code] = {'created': True, 'used_by': None}
+    db['codes'][code] = {'created': True, 'used_by': None, 'price': BOT_PRICE}
     save_db()
 
-    await event.reply(f'✅ **كود تفعيل جديد:**\n\n`{code}`\n\nالكود يستخدم مرة واحدة فقط')
+    await event.reply(f'✅ **كود تفعيل جديد:**\n\n`{code}`\n\n💰 السعر: {BOT_PRICE}$\nالكود يستخدم مرة واحدة فقط')
 
 @bot.on(events.NewMessage(pattern='/codes'))
 async def list_codes(event):
@@ -60,6 +60,24 @@ async def list_codes(event):
         text += f'`{c}`\n'
 
     text += f'\n**المستخدمة:** {len(used)}\n'
+    text += f'\n💰 **سعر الكود:** {BOT_PRICE}$'
+    await event.reply(text)
+
+@bot.on(events.NewMessage(pattern='/stats'))
+async def stats(event):
+    if event.sender_id!= ADMIN_ID:
+        return
+
+    total_bots = len(db.get('bots', {}))
+    total_codes = len(db.get('codes', {}))
+    used_codes = len([c for c, v in db['codes'].items() if v['used_by']])
+    earnings = used_codes * BOT_PRICE
+
+    text = f'**📊 احصائيات المصنع**\n\n'
+    text += f'🤖 **البوتات المنشأة:** {total_bots}\n'
+    text += f'🎟️ **الاكواد الكلية:** {total_codes}\n'
+    text += f'✅ **الاكواد المستخدمة:** {used_codes}\n'
+    text += f'💵 **الارباح:** {earnings}$\n'
     await event.reply(text)
 
 # ====== ستارت ======
@@ -71,13 +89,13 @@ async def start(event):
         [Button.inline("📊 بوتاتي", "my_bots")],
         [Button.inline("📞 الدعم", "support")]
     ]
-    await event.reply(
-        "**🤖 اهلا بك في مصنع بوتات النشر التلقائي**\n\n"
-        "💰 **السعر:** 10$ للبوت الواحد\n" 
-        "🔐 **كود تفعيل** لكل بوت\n\n"
-        "كلم المبرمج @Devazf عشان تشتري كود",
-        buttons=btns
-    )
+    text = "**🤖 اهلا بيك في مصنع البوتات الاحترافي**\n\n"
+    text += f"💰 **السعر:** {BOT_PRICE}$ للبوت الواحد\n"
+    text += "⚡️ **رفع وتشغيل تلقائي** بالكامل\n"
+    text += "🔐 **كود تفعيل** لكل بوت\n"
+    text += "🚀 **دعم فني** 24/7\n\n"
+    text += "كلم الادمن @Devazf عشان تشتري كود"
+    await event.reply(text, buttons=btns)
 
 # ====== استقبال النصوص ======
 @bot.on(events.NewMessage())
@@ -102,13 +120,12 @@ async def handle_text_input(event):
 
     if waiting == 'set_code':
         if text not in db['codes']:
-            await event.reply('❌ **الكود غلط او مستخدم قبل كده**\n\nكلم @Devazf عشان تشتري كود')
+            await event.reply('❌ **الكود غلط**\n\nكلم @Devazf عشان تشتري كود')
             return
         if db['codes'][text]['used_by']:
             await event.reply('❌ **الكود مستخدم قبل كده**')
             return
 
-        # حفظ الكود
         pending['activation_code'] = text
         db['waiting_for'][str(uid)] = 'set_token'
         save_db()
@@ -150,7 +167,7 @@ async def handle_text_input(event):
         del db['waiting_for'][str(uid)]
         save_db()
 
-        btns = [[Button.inline("🚀 انشاء البوت دلوقتي", "generate_bot")]]
+        btns = [[Button.inline("🚀 انشاء وتشغيل البوت الآن", "generate_bot")]]
         await event.reply(
             f'✅ **تم حفظ كل البيانات**\n\n'
             f'**الكود:** `{pending["activation_code"]}`\n'
@@ -158,7 +175,7 @@ async def handle_text_input(event):
             f'**الادمن:** `{pending["admin_id"]}`\n'
             f'**المطور:** @{pending["dev_username"]}\n'
             f'**القنوات:** {pending["channels"] or "مفيش"}\n\n'
-            f'دوس الزر عشان تنشئ البوت',
+            f'دوس الزر والمصنع هيعمل كل حاجة تلقائي 🚀',
             buttons=btns
         )
         return
@@ -179,9 +196,9 @@ async def callback(event):
         save_db()
         await event.edit(
             '🔐 **ادخل كود التفعيل**\n\n'
-            'الكود بتحصل عليه بعد الدفع\n'
+            f'الكود بتحصل عليه بعد دفع {BOT_PRICE}$\n'
             'كلم @Devazf عشان تشتري كود\n\n'
-            'سعر البوت: 3$'
+            f'💰 سعر البوت: {BOT_PRICE}$'
         )
         return
 
@@ -199,10 +216,10 @@ async def callback(event):
             await event.answer('❌ التوكن غلط', alert=True)
             return
 
-        msg = await event.edit('⏳ **جاري انشاء البوت...**\n\n1/4 تجهيز الكود...')
+        msg = await event.edit('⏳ **جاري انشاء البوت...**\n\n1/6 تجهيز الكود...')
 
         try:
-            # 1. جهز كود البوت - حط كود البوت بتاعك كامل هنا
+            # 1. كود البوت - حط كود البوت بتاعك كامل هنا
             bot_code = '''import os
 import json
 from telethon import TelegramClient, events, Button
@@ -231,28 +248,27 @@ async def start(event):
 bot.run_until_disconnected()
 '''
 
-            # 2. بدل البيانات
+            # 2. تبديل البيانات
             bot_code = bot_code.replace('ADMIN_PLACEHOLDER', str(pending['admin_id']))
             bot_code = bot_code.replace('USERNAME_PLACEHOLDER', pending['dev_username'])
             bot_code = bot_code.replace('CHANNELS_PLACEHOLDER', str(pending['channels']))
 
-            await msg.edit('⏳ **جاري انشاء البوت...**\n\n2/4 رفع الكود على GitHub...')
+            await msg.edit('⏳ **جاري انشاء البوت...**\n\n2/6 رفع على GitHub...')
 
             # 3. رفع على GitHub
             repo_name = f"bot-{pending['dev_username'].lower()}-{random.randint(1000,9999)}"
-            headers = {
+            github_headers = {
                 'Authorization': f'token {GITHUB_TOKEN}',
                 'Accept': 'application/vnd.github.v3+json'
             }
 
-            # انشاء الريبو
             repo_data = {
                 'name': repo_name,
-                'description': f'Bot for @{pending["dev_username"]} - Generated by Factory',
+                'description': f'Bot for @{pending["dev_username"]} - Auto Generated by Factory',
                 'private': False,
                 'auto_init': True
             }
-            r = requests.post('https://api.github.com/user/repos', json=repo_data, headers=headers)
+            r = requests.post('https://api.github.com/user/repos', json=repo_data, headers=github_headers)
 
             if r.status_code!= 201:
                 raise Exception(f'GitHub: {r.json().get("message", "Error")}')
@@ -260,7 +276,6 @@ bot.run_until_disconnected()
             repo_url = r.json()['html_url']
             repo_full_name = r.json()['full_name']
 
-            # رفع الملفات
             files = {
                 'main.py': bot_code,
                 'requirements.txt': 'telethon==1.36.0\nrequests==2.31.0',
@@ -276,41 +291,125 @@ bot.run_until_disconnected()
                 requests.put(
                     f'https://api.github.com/repos/{repo_full_name}/contents/{file_path}',
                     json=file_data,
-                    headers=headers
+                    headers=github_headers
                 )
 
-            await msg.edit('⏳ **جاري انشاء البوت...**\n\n3/4 تجهيز رابط Railway...')
+            await msg.edit('⏳ **جاري انشاء البوت...**\n\n3/6 انشاء مشروع Railway...')
 
-            # 4. تعطيل الكود المستخدم
+            # 4. انشاء مشروع Railway
+            railway_headers = {
+                'Authorization': f'Bearer {RAILWAY_TOKEN}',
+                'Content-Type': 'application/json'
+            }
+
+            project_query = '''
+            mutation projectCreate($name: String!) {
+                projectCreate(input: {name: $name}) {
+                    id
+                }
+            }
+            '''
+            project_vars = {'name': repo_name}
+            r = requests.post(
+                'https://backboard.railway.app/graphql/v2',
+                json={'query': project_query, 'variables': project_vars},
+                headers=railway_headers
+            )
+
+            if 'errors' in r.json():
+                raise Exception(f'Railway: {r.json()["errors"][0]["message"]}')
+
+            project_id = r.json()['data']['projectCreate']['id']
+
+            await msg.edit('⏳ **جاري انشاء البوت...**\n\n4/6 ربط GitHub مع Railway...')
+
+            service_query = '''
+            mutation serviceCreate($projectId: String!, $source: ServiceSourceInput!) {
+                serviceCreate(input: {projectId: $projectId, source: $source}) {
+                    id
+                }
+            }
+            '''
+            service_vars = {
+                'projectId': project_id,
+                'source': {'repo': f'{GITHUB_USERNAME}/{repo_name}'}
+            }
+            r = requests.post(
+                'https://backboard.railway.app/graphql/v2',
+                json={'query': service_query, 'variables': service_vars},
+                headers=railway_headers
+            )
+            service_id = r.json()['data']['serviceCreate']['id']
+
+            await msg.edit('⏳ **جاري انشاء البوت...**\n\n5/6 اضافة التوكن وتشغيل...')
+
+            var_query = '''
+            mutation variableUpsert($projectId: String!, $serviceId: String!, $name: String!, $value: String!) {
+                variableUpsert(input: {projectId: $projectId, serviceId: $serviceId, name: $name, value: $value}) {
+                    id
+                }
+            }
+            '''
+            var_vars = {
+                'projectId': project_id,
+                'serviceId': service_id,
+                'name': 'BOT_TOKEN',
+                'value': pending['token']
+            }
+            requests.post(
+                'https://backboard.railway.app/graphql/v2',
+                json={'query': var_query, 'variables': var_vars},
+                headers=railway_headers
+            )
+
+            deploy_query = '''
+            mutation serviceInstanceDeploy($serviceId: String!) {
+                serviceInstanceDeploy(serviceId: $serviceId) {
+                    id
+                }
+            }
+            '''
+            deploy_vars = {'serviceId': service_id}
+            requests.post(
+                'https://backboard.railway.app/graphql/v2',
+                json={'query': deploy_query, 'variables': deploy_vars},
+                headers=railway_headers
+            )
+
+            await msg.edit('⏳ **جاري انشاء البوت...**\n\n6/6 فحص البوت...')
+
+            # 5. تعطيل الكود وحفظ البيانات
             db['codes'][pending['activation_code']]['used_by'] = uid
             db['used_codes'].append(pending['activation_code'])
 
-            # حفظ بيانات البوت
             if 'bots' not in db:
                 db['bots'] = {}
             db['bots'][repo_name] = {
                 'owner': uid,
                 'username': pending['dev_username'],
                 'repo': repo_url,
+                'project_id': project_id,
+                'service_id': service_id,
                 'created': True
             }
 
-            await msg.edit('⏳ **جاري انشاء البوت...**\n\n4/4 تم ✅')
-
-            # 5. رابط النشر
-            railway_url = f"https://railway.app/new?template=https://github.com/{repo_full_name}&envs=BOT_TOKEN"
+            # فحص ان البوت اشتغل
+            await asyncio.sleep(10)
+            test_bot = TelegramClient(StringSession(), API_ID, API_HASH)
+            await test_bot.start(bot_token=pending['token'])
+            me = await test_bot.get_me()
+            await test_bot.disconnect()
 
             await msg.edit(
-                f'✅ **تم انشاء البوت بنجاح**\n\n'
-                f'**الريبو:** {repo_url}\n'
+                f'✅ **تم انشاء وتشغيل البوت بنجاح**\n\n'
+                f'**يوزر البوت:** @{me.username}\n'
                 f'**المطور:** @{pending["dev_username"]}\n'
+                f'**الريبو:** {repo_url}\n'
                 f'**الكود المستخدم:** `{pending["activation_code"]}`\n\n'
-                f'**الخطوة الاخيرة:**\n'
-                f'1️⃣ دوس الزر تحت\n'
-                f'2️⃣ حط التوكن ده في BOT_TOKEN:\n`{pending["token"]}`\n'
-                f'3️⃣ دوس Deploy\n\n'
-                f'⏱️ البوت هيشتغل خلال دقيقتين 🚀',
-                buttons=[[Button.url("🚀 انشر على Railway الآن", railway_url)]]
+                f'🚀 **البوت شغال دلوقتي** جرب تبعتله /start\n\n'
+                f'الرابط: https://t.me/{me.username}\n\n'
+                f'💰 تم خصم {BOT_PRICE}$ من رصيد الاكواد',
+                buttons=[[Button.url("🤖 افتح البوت", f"https://t.me/{me.username}")]]
             )
 
             del db['pending_bots'][str(uid)]
