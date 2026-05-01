@@ -1,4 +1,4 @@
-ifrom telethon import TelegramClient, events, Button
+from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError, UserDeactivatedBanError, UserAlreadyParticipantError
 from telethon.tl.functions.channels import GetParticipantRequest, JoinChannelRequest
@@ -13,14 +13,12 @@ import re
 
 # ===== بيانات البوت =====
 API_ID = 31650696
-API_HASH = "2829d6502df68cd12fab33cabf2851d2"
-BOT_TOKEN = "{BOT_TOKEN}"
-ADMIN_ID = {ADMIN_ID}
-DEVELOPER_LINK = "{DEVELOPER_LINK}"
-FORCE_SUB_CHANNELS = {FORCE_SUB_CHANNELS}
-IS_PAID_BOT = {IS_PAID_BOT}
-EXPIRY_DATE = {EXPIRY_DATE}
-FACTORY_ADMIN_ID = {FACTORY_ADMIN_ID}
+API_HASH = '2829d6502df68cd12fab33cabf2851d2'
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+ADMIN_ID = 154919127
+DEVELOPER_USERNAME = 'Devazf'
+DEVELOPER_LINK = f'https://t.me/{DEVELOPER_USERNAME}'
+REQUIRED_CHANNELS = ['Vip6705']
 DB_FILE = 'database.json'
 BACKUP_FILE = 'sessions_backup.json'
 SUB_PRICE = 3
@@ -322,49 +320,6 @@ async def start(event):
                     [Button.inline("✅ تحققت", b"check_sub")]]
             await event.reply("🔒 **اشترك في القناة الاول:**", buttons=btns)
             return
-@bot.on(events.NewMessage())
-async def handle_text_input(event):
-    if event.raw_text.startswith('/'):
-        return
-        
-    uid = event.sender_id
-    text = event.raw_text.strip()
-    
-    if str(uid) not in db.get('waiting_for', {}):
-        return
-        
-    waiting = db['waiting_for'][str(uid)]
-    
-    if waiting == 'set_token':
-        if 'users' in text.lower() or ':' not in text or len(text) < 30:
-            await event.reply('❌ **التوكن غلط!**\n\nلازم يبدأ بأرقام وفيه `:`\nمثال:\n`1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz`')
-            del db['waiting_for'][str(uid)]
-            save_db()
-            return
-            
-        if 'pending_bots' not in db:
-            db['pending_bots'] = {}
-        if str(uid) not in db['pending_bots']:
-            db['pending_bots'][str(uid)] = {}
-        db['pending_bots'][str(uid)]['token'] = text
-        del db['waiting_for'][str(uid)]
-        save_db()
-        await event.reply('✅ **تم حفظ التوكن**')
-        
-    elif waiting == 'set_admin':
-        if not text.isdigit():
-            await event.reply('❌ الايدي لازم ارقام بس')
-            del db['waiting_for'][str(uid)]
-            save_db()
-            return
-        if 'pending_bots' not in db:
-            db['pending_bots'] = {}
-        if str(uid) not in db['pending_bots']:
-            db['pending_bots'][str(uid)] = {}
-        db['pending_bots'][str(uid)]['admin_id'] = text
-        del db['waiting_for'][str(uid)]
-        save_db()
-        await event.reply('✅ **تم حفظ ايدي الادمن**')
 
     if not is_subscribed(uid):
         btns = [
@@ -408,123 +363,7 @@ async def callback(event):
         await start(event)
         return
 
-    elif data == 'new_bot':
-        if 'pending_bots' not in db:
-            db['pending_bots'] = {}
-        db['pending_bots'][str(uid)] = {}
-        save_db()
-        btns = [
-            [Button.inline("🔑 توكن البوت", "ask_token")],
-            [Button.inline("👤 ايدي الادمن", "ask_admin")],
-            [Button.inline("🚀 انشاء البوت", "generate_bot")],
-            [Button.inline("🔙 رجوع", "back_main")]
-        ]
-        await event.edit("**📝 اختر خطوة:**\n\n1. ادخل توكن البوت\n2. ادخل ايدي الادمن\n3. دوس انشاء البوت", buttons=btns)
-        return
-
-    elif data == 'ask_token':
-        if 'waiting_for' not in db:
-            db['waiting_for'] = {}
-        db['waiting_for'][str(uid)] = 'set_token'
-        save_db()
-        await event.answer()
-        await event.reply('📝 **ابعت توكن البوت دلوقتي**\n\nمن @BotFather\n\nشكله:\n`1234567890:ABCdEfGhI...`')
-        return
-        
-    elif data == 'ask_admin':
-        if 'waiting_for' not in db:
-            db['waiting_for'] = {}
-        db['waiting_for'][str(uid)] = 'set_admin'
-        save_db()
-        await event.answer()
-        await event.reply('📝 **ابعت ايدي الادمن دلوقتي**\n\nمن @userinfobot')
-        return
-
     elif data == 'free_trial':
-    elif data == 'generate_bot':
-        pending = db.get('pending_bots', {}).get(str(uid), {})
-        if not pending.get('token') or not pending.get('admin_id'):
-            await event.answer('❌ لازم تدخل التوكن وايدي الادمن اول', alert=True)
-            return
-
-        await event.edit('⏳ **جاري فحص التوكن...**')
-        try:
-            token = pending['token'].strip()
-            
-            if not token or token == 'users' or len(token) < 40 or ':' not in token:
-                await event.reply(f'''❌ **التوكن غلط:** 
-`{token}`
-
-**شكله الصح:**
-`1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz123456789`
-
-هاته من @BotFather''')
-                return
-
-            duration_key = pending.get('duration', '1m')
-            expiry_date = (datetime.now() + timedelta(days=DURATIONS[duration_key]['days'])).isoformat()
-
-            await event.edit('⏳ **جاري انشاء البوت...**')
-            
-            bot_data = {
-                'BOT_TOKEN': token,
-                'ADMIN_ID': pending['admin_id'],
-                'DEVELOPER_LINK': pending.get('dev_username', DEVELOPER_LINK),
-                'FORCE_SUB_CHANNELS': repr(pending.get('channels', [])),
-                'IS_PAID_BOT': pending.get('is_paid', False),
-                'EXPIRY_DATE': f'"{expiry_date}"',
-                'FACTORY_ADMIN_ID': ADMIN_ID
-            }
-            bot_code = generate_bot_file(bot_data)
-            filename = f'bot_{uid}_{random.randint(1000,9999)}.py'
-            with open(filename, 'w', encoding='utf-8') as f: f.write(bot_code)
-
-            test_client = TelegramClient(StringSession(), API_ID, API_HASH)
-            await test_client.start(bot_token=token)
-            me = await test_client.get_me()
-            await test_client.disconnect()
-
-            bot_info = {
-                'username': me.username,
-                'token': token,
-                'created': datetime.now().isoformat(),
-                'is_paid': pending.get('is_paid', False),
-                'expiry': expiry_date,
-                'duration': duration_key,
-                'owner_id': uid,
-                'disabled': False
-            }
-            
-            if 'bots' not in user: user['bots'] = []
-            user['bots'].append(bot_info)
-            if 'all_bots' not in db: db['all_bots'] = {}
-            db['all_bots'][me.username] = bot_info
-            user['bots_used'] = user.get('bots_used', 0) + 1
-            if str(uid) in db.get('pending_bots', {}): del db['pending_bots'][str(uid)]
-            save_db()
-
-            bot_type = '💰 مدفوع' if pending.get('is_paid', False) else '🆓 مجاني'
-            exp_date = datetime.fromisoformat(expiry_date).strftime('%Y-%m-%d')
-            await event.reply(f'''✅ **تم انشاء البوت بنجاح**
-
-🤖 @{me.username}
-💎 النوع: {bot_type}
-⏰ الصلاحية: {DURATIONS[duration_key]["name"]}
-📅 ينتهي: {exp_date}
-
-📁 **الملف جاهز للرفع على Railway**
-
-Variables: BOT_TOKEN = {token}''', file=filename)
-            
-        except Exception as e:
-            error_msg = str(e)
-            print(f'Bot creation error: {error_msg}')
-            if 'AccessTokenInvalidError' in error_msg or 'Unauthorized' in error_msg:
-                error_text = '❌ **التوكن غلط - طلع واحد جديد من @BotFather**'
-            else:
-                error_text = f'❌ **خطأ:** `{error_msg[:100]}`'
-            await event.reply(error_text)
-        return
         if user.get('used_trial'):
             await event.answer("❌ استخدمت التجربة المجانية قبل كده", alert=True)
             return
@@ -1508,33 +1347,13 @@ async def backup_task():
                 await bot.send_message(ADMIN_ID, f"💾 **نسخة احتياطية**\n\nتم حفظ {len(db['users'])} حساب\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}")
             except:
                 pass
-async def check_disabled():
-    while True:
-        await asyncio.sleep(300)
-        if db.get('bot_config', {}).get('disabled_by_factory'):
-            print('⛔ Bot disabled by factory admin')
-            await bot.disconnect()
-            break
 
 async def main():
     load_db()
-    if datetime.now() > datetime.fromisoformat(EXPIRY_DATE):
-        print(f'❌ Bot expired on {EXPIRY_DATE}')
-        return
-    if db.get('bot_config', {}).get('disabled_by_factory'):
-        print('⛔ Bot disabled by factory admin')
-        return
-
-# امسح البيانات البايظة - شيل السطور دي بعد اول تشغيل
-if 'pending_bots' in db:
-    db['pending_bots'] = {}
-    save_db()
-    print("تم مسح pending_bots البايظ")
-
-asyncio.create_task(check_expiry())
-    asyncio.create_task(check_expiry())
-    asyncio.create_task(check_disabled()) # ← جديد
     asyncio.create_task(backup_task())
     await bot.start(bot_token=BOT_TOKEN)
-    print('Bot Started...')
+    print("Bot Started Successfully...")
     await bot.run_until_disconnected()
+
+if __name__ == '__main__':
+    asyncio.run(main())
