@@ -14,7 +14,7 @@ API_ID = 31650696
 API_HASH = '2829d6502df68cd12fab33cabf2851d2'
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN') # لازم تضيفه في Railway
-GITHUB_USERNAME = 'YourGitHubUsername' # غيره ليوزر جيتهاب بتاعك
+GITHUB_USERNAME = 'nashrmsnah-art' # غيره ليوزر جيتهاب بتاعك
 ADMIN_ID = 7832394974
 DB_FILE = 'database.json'
 
