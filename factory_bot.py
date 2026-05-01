@@ -1929,14 +1929,15 @@ async def handle_messages(event):
         await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
         return
 
-async def main():
-    load_db()
-    asyncio.create_task(backup_task())
-    await bot.start(bot_token=BOT_TOKEN)
-    print("Factory Bot Started...")
-    await bot.run_until_disconnected()
-
+        '',
+        'async def main():',
+        ' load_db()',
+        ' asyncio.create_task(backup_task())',
+        ' await bot.start(bot_token=BOT_TOKEN)',
+        ' print("Factory Bot Started...")',
+        ' await bot.run_until_disconnected()',
+        '',
         'if __name__ == "__main__":',
         ' asyncio.run(main())',
-        ''])  # ← ده اللي بيقفل lines = [
+        ''])  # ← ده اهم سطر بيقفل الـ lines = [
     return '\n'.join(lines)
