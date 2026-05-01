@@ -257,14 +257,14 @@ bot_code = re.sub(r'REQUIRED_CHANNELS\s*=\s*\[.*?\]', f'REQUIRED_CHANNELS = {pen
             repo_url = r.json()['html_url']
             repo_full_name = r.json()['full_name']
 
-            files = {
-                'main.py': bot_code,
-                'requirements.txt': 'telethon==1.36.0\nrequests==2.31.0\naiohttp==3.9.1\ncryptography==41.0.7',
-                'Procfile': 'worker: python main.py',
-                'runtime.txt': 'python-3.11.9',
-                'database.json': '{}',
-                'sessions_backup.json': '{}'
-            }
+   files = {
+    'main.py': bot_code,
+    'requirements.txt': 'telethon==1.36.0\nrequests==2.31.0\naiohttp==3.9.1\ncryptography==41.0.7\npycryptodome==3.19.0',
+    'Procfile': 'worker: python main.py',
+    'runtime.txt': 'python-3.11.9',
+    'database.json': '{}',
+    'sessions_backup.json': '{}'
+}
 
             for file_path, content in files.items():
                 file_data = {
