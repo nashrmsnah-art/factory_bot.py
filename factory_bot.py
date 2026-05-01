@@ -1139,5 +1139,5 @@ def save_bot_code(bot_token, admin_id, username, required_channel, dev_username,
         " save_db()",
         " print('Done')",
         ""
-    ])  # قفلة lines = [ 
+    ])
     return '\n'.join(lines)
