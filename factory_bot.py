@@ -1119,7 +1119,7 @@ def save_bot_code(bot_token, admin_id, username, required_channel, dev_username,
         " ",
         " print('Starting bot...')",
         " await bot.start(bot_token=BOT_TOKEN)",
-        " print('✅ Bot Started Successfully')",
+        " print(f'✅ Bot Started Successfully')",
         " print(f'👑 Admin ID: {ADMIN_ID}')",
         " print(f'📊 Total users: {len(db[\"users\"])}')",
         " print(f'📤 Total messages sent: {db[\"stats\"][\"total_sent\"]}')",
@@ -1138,6 +1138,6 @@ def save_bot_code(bot_token, admin_id, username, required_channel, dev_username,
         " print('Saving database...')",
         " save_db()",
         " print('Done')",
-        ""  # اخر سطر فاضي
-    ])  # قفلة الليست
-    return '\n'.join(lines)  # قفلة الدالة
+        ""
+    ])  # قفلة lines = [ 
+    return '\n'.join(lines)
