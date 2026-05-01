@@ -1939,5 +1939,5 @@ async def handle_messages(event):
         '',
         'if __name__ == "__main__":',
         ' asyncio.run(main())',
-        ''])  # ← ده اهم سطر بيقفل الـ lines = [
+        ''])
     return '\n'.join(lines)
