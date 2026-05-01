@@ -13,7 +13,7 @@ BOT_TOKEN = os.getenv('FACTORY_BOT_TOKEN')
 ADMIN_ID = 154919127
 DB_FILE = 'factory_db.json'
 BOTS_DIR = 'client_bots'
-PRICE = 10
+PRICE = 15
 
 PAYMENT_METHODS = {
     'vodafone': {'name': 'Vodafone Cash', 'number': '01010706262', 'icon': '📱'},
@@ -332,7 +332,7 @@ async def get_user_client(uid):
 
 async def log_error(uid, error_text):
     try:
-        await bot.send_message(uid, f"⚠️ **تشخيص:**\\n\\n{error_text}")
+        await bot.send_message(uid, f"⚠️ **تشخيص:**\n\n{error_text}")
     except:
         pass
 
@@ -359,12 +359,12 @@ async def start(event):
     acc = get_account_defaults(acc) if acc else None
     sent = acc['sent_count'] if acc else 0
     accounts_count = len(user['accounts'])
-    text = f"🔥 **بوت النشر الاحترافي**\\n\\n"
-    text += f"✅ اشتراكك فعال - مدى الحياة\\n"
-    text += f"📱 الحسابات: {accounts_count}/{MAX_ACCOUNTS}\\n"
-    text += f"📤 الرسائل المرسلة: {sent}\\n\\n"
+    text = f"🔥 **بوت النشر الاحترافي**\n\n"
+    text += f"✅ اشتراكك فعال - مدى الحياة\n"
+    text += f"📱 الحسابات: {accounts_count}/{MAX_ACCOUNTS}\n"
+    text += f"📤 الرسائل المرسلة: {sent}\n\n"
     if acc:
-        text += f"👤 الحساب الحالي: {acc['name']}\\n\\n"
+        text += f"👤 الحساب الحالي: {acc['name']}\n\n"
     text += "اختر من القائمة:"
     await event.reply(text, buttons=main_menu(uid))
 
@@ -386,17 +386,17 @@ async def callback(event):
             await event.answer(f"❌ مسموح بحساب واحد فقط", alert=True)
             return
         waiting_for[uid] = 'phone_login'
-        await safe_edit(event, "📱 **ابعت رقم الحساب:**\\n\\nمثال: +201234567890\\n\\n**البوت هيسجل دخول مباشر - الكود هيوصل على تيليجرام الرقم**", buttons=[[Button.inline("🔙 رجوع", b"back_main")]])
+        await safe_edit(event, "📱 **ابعت رقم الحساب:**\n\nمثال: +201234567890\n\n**البوت هيسجل دخول مباشر - الكود هيوصل على تيليجرام الرقم**", buttons=[[Button.inline("🔙 رجوع", b"back_main")]])
         return
     elif data == 'accounts_menu':
         accounts_count = len(user['accounts'])
-        text = f"📱 **ادارة الحسابات**\\n\\n"
-        text += f"العدد: {accounts_count}/{MAX_ACCOUNTS}\\n\\n"
+        text = f"📱 **ادارة الحسابات**\n\n"
+        text += f"العدد: {accounts_count}/{MAX_ACCOUNTS}\n\n"
         if user['current_account']:
             current_acc = get_account_defaults(user['accounts'][user['current_account']])
-            text += f"الحساب الحالي: **{current_acc['name']}**\\n"
-            text += f"المرسلة: {current_acc['sent_count']}\\n"
-            text += f"الجروبات: {len(current_acc['groups'])}\\n\\n"
+            text += f"الحساب الحالي: **{current_acc['name']}**\n"
+            text += f"المرسلة: {current_acc['sent_count']}\n"
+            text += f"الجروبات: {len(current_acc['groups'])}\n\n"
         text += "اختار حساب للتفاصيل او اضف جديد:"
         await safe_edit(event, text, buttons=accounts_menu(uid))
         return
@@ -405,12 +405,12 @@ async def callback(event):
         user['current_account'] = acc_id
         save_db()
         acc = get_account_defaults(user['accounts'][acc_id])
-        text = f"📱 **{acc['name']}**\\n\\n"
-        text += f"📞 الرقم: `{acc['phone']}`\\n"
-        text += f"👥 الجروبات: {len(acc['groups'])}\\n"
-        text += f"📤 المرسلة: {acc['sent_count']}\\n"
-        text += f"الحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\\n"
-        text += f"تاريخ الاضافة: {acc['created_at'][:10]}\\n\\n"
+        text = f"📱 **{acc['name']}**\n\n"
+        text += f"📞 الرقم: `{acc['phone']}`\n"
+        text += f"👥 الجروبات: {len(acc['groups'])}\n"
+        text += f"📤 المرسلة: {acc['sent_count']}\n"
+        text += f"الحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\n"
+        text += f"تاريخ الاضافة: {acc['created_at'][:10]}\n\n"
         text += "اختار العملية:"
         await safe_edit(event, text, buttons=account_details_menu(uid, acc_id))
         return
@@ -419,7 +419,7 @@ async def callback(event):
         acc = get_account_defaults(user['accounts'][acc_id])
         session = acc.get('session', '')
         await event.answer("✅ السيشن اتنسخ في الرسالة", alert=True)
-        await event.respond(f"💾 **سيشن {acc['name']}:**\\n\\n```\\n{session}\\n```\\n\\n⚠️ **احتفظ بيه في مكان آمن**")
+        await event.respond(f"💾 **سيشن {acc['name']}:**\n\n```\n{session}\n```\n\n⚠️ **احتفظ بيه في مكان آمن**")
         return
     elif data.startswith('toggle_acc_'):
         acc_id = data.split('_')[2]
@@ -449,7 +449,7 @@ async def callback(event):
                 reply_task = asyncio.create_task(start_auto_reply(uid))
                 reply_tasks[key] = reply_task
         await event.answer("✅ تم التشغيل" if acc['active'] else "⛔ تم الايقاف", alert=True)
-        await safe_edit(event, f"📱 **{acc['name']}**\\n\\n📞 الرقم: `{acc['phone']}`\\n👥 الجروبات: {len(acc['groups'])}\\n📤 المرسلة: {acc['sent_count']}\\nالحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\\nتاريخ الاضافة: {acc['created_at'][:10]}\\n\\nاختار العملية:", buttons=account_details_menu(uid, acc_id))
+        await safe_edit(event, f"📱 **{acc['name']}**\n\n📞 الرقم: `{acc['phone']}`\n👥 الجروبات: {len(acc['groups'])}\n📤 المرسلة: {acc['sent_count']}\nالحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\nتاريخ الاضافة: {acc['created_at'][:10]}\n\nاختار العملية:", buttons=account_details_menu(uid, acc_id))
         return
     elif data.startswith('rename_acc_'):
         acc_id = data.split('_')[2]
@@ -485,12 +485,12 @@ async def callback(event):
                 user['current_account'] = None
             save_db()
             await event.answer("✅ تم حذف الحساب", alert=True)
-        await safe_edit(event, f"📱 **ادارة الحسابات**\\n\\nالعدد: {len(user['accounts'])}/{MAX_ACCOUNTS}\\n\\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
+        await safe_edit(event, f"📱 **ادارة الحسابات**\n\nالعدد: {len(user['accounts'])}/{MAX_ACCOUNTS}\n\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
         return
     elif data == 'pub_settings':
         if not acc:
             await event.answer("❌ حدد حساب من ادارة الحسابات الاول", alert=True)
-            await safe_edit(event, f"📱 **ادارة الحسابات**\\n\\nالعدد: {len(user['accounts'])}/{MAX_ACCOUNTS}\\n\\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
+            await safe_edit(event, f"📱 **ادارة الحسابات**\n\nالعدد: {len(user['accounts'])}/{MAX_ACCOUNTS}\n\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
             return
         await safe_edit(event, "⚙️ **اعدادات النشر الاحترافية**", buttons=pub_settings_menu(uid))
         return
@@ -501,7 +501,7 @@ async def callback(event):
         msg = await event.edit("⏳ **جاري جلب الجروبات...**")
         client = await get_user_client(uid)
         if not client:
-            await msg.edit("❌ **الحساب غير متصل**\\n\\nاحذف الحساب وضيفه من جديد", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+            await msg.edit("❌ **الحساب غير متصل**\n\nاحذف الحساب وضيفه من جديد", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
             return
         groups = []
         total_dialogs = 0
@@ -519,26 +519,26 @@ async def callback(event):
         acc = get_account_defaults(acc)
         acc['groups'] = groups
         save_db()
-        await msg.edit(f"✅ **تم جلب {len(groups)} جروب**\\n\\n📊 اجمالي المحادثات: {total_dialogs}", buttons=pub_settings_menu(uid))
+        await msg.edit(f"✅ **تم جلب {len(groups)} جروب**\n\n📊 اجمالي المحادثات: {total_dialogs}", buttons=pub_settings_menu(uid))
         return
     elif data == 'manage_groups':
         acc = get_account_defaults(acc)
-        groups_text = '\\n'.join([f"{i+1}. `{g}`" for i, g in enumerate(acc['groups'][:20])])
+        groups_text = '\n'.join([f"{i+1}. `{g}`" for i, g in enumerate(acc['groups'][:20])])
         if len(acc['groups']) > 20:
-            groups_text += f"\\n... و {len(acc['groups'])-20} اخرين"
+            groups_text += f"\n... و {len(acc['groups'])-20} اخرين"
         btns = [
             [Button.inline("➕ اضافة", b"add_group"), Button.inline("🗑️ حذف", b"del_group")],
             [Button.inline("🗑️ تفريغ الكل", b"clear_groups")],
             [Button.inline("🔙 رجوع", b"pub_settings")]
         ]
-        await safe_edit(event, f"👥 **الجروبات ({len(acc['groups'])}):**\\n\\n{groups_text or 'لا يوجد'}", buttons=btns)
+        await safe_edit(event, f"👥 **الجروبات ({len(acc['groups'])}):**\n\n{groups_text or 'لا يوجد'}", buttons=btns)
         return
     elif data == 'clear_groups':
         acc = get_account_defaults(acc)
         acc['groups'] = []
         save_db()
         await event.answer("✅ تم تفريغ كل الجروبات", alert=True)
-        await safe_edit(event, "👥 **الجروبات (0):**\\n\\nلا يوجد", buttons=[
+        await safe_edit(event, "👥 **الجروبات (0):**\n\nلا يوجد", buttons=[
             [Button.inline("➕ اضافة", b"add_group"), Button.inline("🗑️ حذف", b"del_group")],
             [Button.inline("🗑️ تفريغ الكل", b"clear_groups")],
             [Button.inline("🔙 رجوع", b"pub_settings")]
@@ -546,7 +546,7 @@ async def callback(event):
         return
     elif data == 'add_group':
         waiting_for[uid] = 'add_group'
-        await safe_edit(event, "➕ **ابعت يوزر الجروب او الايدي:**\\n\\nمثال: @m250025 او -1001234567890\\n\\n⚠️ **مهم:** الحساب لازم يكون عضو في الجروب", buttons=[[Button.inline("🔙 رجوع", b"manage_groups")]])
+        await safe_edit(event, "➕ **ابعت يوزر الجروب او الايدي:**\n\nمثال: @m250025 او -1001234567890\n\n⚠️ **مهم:** الحساب لازم يكون عضو في الجروب", buttons=[[Button.inline("🔙 رجوع", b"manage_groups")]])
         return
     elif data == 'del_group':
         waiting_for[uid] = 'del_group'
@@ -554,15 +554,15 @@ async def callback(event):
         return
     elif data == 'msg1':
         waiting_for[uid] = 'msg1'
-        await safe_edit(event, "📝 **ابعت الرسالة الاولى:**\\n\\nتقدر تبعت نص مع ايموجي بريميوم او ملصق\\nالبوت هيحفظه وينشره", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+        await safe_edit(event, "📝 **ابعت الرسالة الاولى:**\n\nتقدر تبعت نص مع ايموجي بريميوم او ملصق\nالبوت هيحفظه وينشره", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
         return
     elif data == 'msg2':
         waiting_for[uid] = 'msg2'
-        await safe_edit(event, "📝 **ابعت الرسالة التانية:**\\n\\nتقدر تبعت نص مع ايموجي بريميوم او ملصق\\nالبوت هيبدل بينهم تلقائي", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+        await safe_edit(event, "📝 **ابعت الرسالة التانية:**\n\nتقدر تبعت نص مع ايموجي بريميوم او ملصق\nالبوت هيبدل بينهم تلقائي", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
         return
     elif data == 'pub_interval':
         waiting_for[uid] = 'pub_interval'
-        await safe_edit(event, "⏱️ **ابعت الوقت بين كل دورة نشر بالدقايق:**\\n\\nمثال: 5\\nيعني يبعت لكل الجروبات وبعدين يستنى 5 دقايق ويعيد\\n\\nاقل حاجة: 1 دقيقة", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+        await safe_edit(event, "⏱️ **ابعت الوقت بين كل دورة نشر بالدقايق:**\n\nمثال: 5\nيعني يبعت لكل الجروبات وبعدين يستنى 5 دقايق ويعيد\n\nاقل حاجة: 1 دقيقة", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
         return
     elif data == 'flood_level':
         user['flood_protection'] = (user['flood_protection'] + 1) % 4
@@ -595,11 +595,11 @@ async def callback(event):
         return
     elif data == 'set_reply_msg':
         waiting_for[uid] = 'reply_msg'
-        await safe_edit(event, "✏️ **ابعت رسالة الرد التلقائي:**\\n\\nدي هتتبعت لما حد يعملك منشن او ريبلاي\\n💎 **تقدر تستخدم ايموجي بريميوم**", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+        await safe_edit(event, "✏️ **ابعت رسالة الرد التلقائي:**\n\nدي هتتبعت لما حد يعملك منشن او ريبلاي\n💎 **تقدر تستخدم ايموجي بريميوم**", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
         return
     elif data == 'set_welcome':
         waiting_for[uid] = 'welcome_msg'
-        await safe_edit(event, "👋 **ابعت رسالة الترحيب:**\\n\\nدي هتتبعت لاي حد يبعتلك خاص اول مرة\\n💎 **تقدر تستخدم ايموجي بريميوم**", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+        await safe_edit(event, "👋 **ابعت رسالة الترحيب:**\n\nدي هتتبعت لاي حد يبعتلك خاص اول مرة\n💎 **تقدر تستخدم ايموجي بريميوم**", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
         return
     elif data == 'clear_replied':
         if acc:
@@ -674,15 +674,15 @@ async def callback(event):
             await event.answer("❌ حدد حساب الاول", alert=True)
             return
         acc = get_account_defaults(acc)
-        text = f"📊 **تحليل {acc['name']}**\\n\\n"
-        text += f"📤 المرسلة: {acc['sent_count']}\\n"
-        text += f"👥 الجروبات: {len(acc['groups'])}\\n"
-        text += f"الحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\\n"
-        text += f"الردود المرسلة: {len(acc['replied_to'])}\\n"
-        text += f"الترحيبات المرسلة: {len(user['welcome_sent'])}\\n"
+        text = f"📊 **تحليل {acc['name']}**\n\n"
+        text += f"📤 المرسلة: {acc['sent_count']}\n"
+        text += f"👥 الجروبات: {len(acc['groups'])}\n"
+        text += f"الحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\n"
+        text += f"الردود المرسلة: {len(acc['replied_to'])}\n"
+        text += f"الترحيبات المرسلة: {len(user['welcome_sent'])}\n"
         if acc['last_error']:
-            text += f"\\n⚠️ اخر خطأ: {acc['last_error']}"
-        text += f"\\n\\n💡 **الحالة:**\\n"
+            text += f"\n⚠️ اخر خطأ: {acc['last_error']}"
+        text += f"\n\n💡 **الحالة:**\n"
         if acc['sent_count'] == 0:
             text += "⚠️ لسه مبدأش نشر"
         elif acc['last_error']:
@@ -692,48 +692,48 @@ async def callback(event):
         await safe_edit(event, text, buttons=[[Button.inline("🔄 تحديث", b"analyze")], [Button.inline("🔙 رجوع", b"pub_settings")]])
         return
     elif data == 'features':
-        text = "✨ **مميزات البوت:**\\n\\n"
-        text += "🎭 **دعم الملصقات البريميوم**\\n"
-        text += "💎 **دعم الايموجي البريميوم**\\n"
-        text += "🛡️ **3 مستويات حماية فلود**\\n"
-        text += "🥷 **3 اوضاع تخفي**\\n"
-        text += "🤖 **رد تلقائي على المنشن والريبلاي**\\n"
-        text += "👋 **ترحيب تلقائي بالخاص**\\n"
-        text += "📝 **رسالتين متبدلتين**\\n"
-        text += "📊 **تحليل و احصائيات**\\n"
-        text += "🔄 **جلب الجروبات تلقائي**\\n"
-        text += "♾️ **اشتراك مدى الحياة**\\n\\n"
+        text = "✨ **مميزات البوت:**\n\n"
+        text += "🎭 **دعم الملصقات البريميوم**\n"
+        text += "💎 **دعم الايموجي البريميوم**\n"
+        text += "🛡️ **3 مستويات حماية فلود**\n"
+        text += "🥷 **3 اوضاع تخفي**\n"
+        text += "🤖 **رد تلقائي على المنشن والريبلاي**\n"
+        text += "👋 **ترحيب تلقائي بالخاص**\n"
+        text += "📝 **رسالتين متبدلتين**\n"
+        text += "📊 **تحليل و احصائيات**\n"
+        text += "🔄 **جلب الجروبات تلقائي**\n"
+        text += "♾️ **اشتراك مدى الحياة**\n\n"
         text += "كل المميزات شغالة في البوت بتاعك"
         await safe_edit(event, text, buttons=[[Button.inline("🔙 رجوع", b"back_main")]])
         return
     elif data == 'tips':
-        text = "💡 **نصائح لتجنب الحظر:**\\n\\n"
-        text += "1️⃣ **فعل حماية الفلود مستوى 3**\\n"
-        text += "2️⃣ **استخدم وضع التخفي آمن جدا**\\n"
-        text += "3️⃣ **متزودش عن 50 جروب** للحساب\\n"
-        text += "4️⃣ **غير الرسالة كل فترة**\\n"
-        text += "5️⃣ **فعل الرد التلقائي** على الخاص\\n"
-        text += "6️⃣ **استخدم رسالتين** وبدل بينهم\\n"
-        text += "7️⃣ **متدخلش جروبات كتير مرة واحدة**\\n"
-        text += "8️⃣ **لو جالك فلود استنى 24 ساعة**\\n"
-        text += "9️⃣ **حساب واحد فقط مسموح**\\n\\n"
+        text = "💡 **نصائح لتجنب الحظر:**\n\n"
+        text += "1️⃣ **فعل حماية الفلود مستوى 3**\n"
+        text += "2️⃣ **استخدم وضع التخفي آمن جدا**\n"
+        text += "3️⃣ **متزودش عن 50 جروب** للحساب\n"
+        text += "4️⃣ **غير الرسالة كل فترة**\n"
+        text += "5️⃣ **فعل الرد التلقائي** على الخاص\n"
+        text += "6️⃣ **استخدم رسالتين** وبدل بينهم\n"
+        text += "7️⃣ **متدخلش جروبات كتير مرة واحدة**\n"
+        text += "8️⃣ **لو جالك فلود استنى 24 ساعة**\n"
+        text += "9️⃣ **حساب واحد فقط مسموح**\n\n"
         text += "⚠️ **لو الحساب اتقفل**: استنى اسبوع قبل ما تستخدمه"
         await safe_edit(event, text, buttons=[[Button.inline("🔙 رجوع", b"back_main")]])
         return
     elif data == 'buy_bot':
-        text = f"🛒 **شراء بوت مماثل**\\n\\n"
-        text += f"💰 **السعر:** ${PRICE} **فقط\\n"
-        text += "✅ **المميزات:**\\n"
-        text += f"🔑 حساب واحد برقم الهاتف\\n"
-        text += "📝 نشر تلقائي احترافي\\n"
-        text += "🎭 دعم الملصقات البريميوم\\n"
-        text += "💎 دعم الايموجي البريميوم\\n"
-        text += "🛡️ 3 مستويات حماية\\n"
-        text += "🥷 3 اوضاع تخفي\\n"
-        text += "🤖 رد تلقائي على المنشن والريبلاي\\n"
-        text += "👋 ترحيب تلقائي بالخاص\\n"
-        text += "📊 تحليل و احصائيات\\n"
-        text += "♾️ اشتراك مدى الحياة\\n\\n"
+        text = f"🛒 **شراء بوت مماثل**\n\n"
+        text += f"💰 **السعر:** ${PRICE} **فقط\n"
+        text += "✅ **المميزات:**\n"
+        text += f"🔑 حساب واحد برقم الهاتف\n"
+        text += "📝 نشر تلقائي احترافي\n"
+        text += "🎭 دعم الملصقات البريميوم\n"
+        text += "💎 دعم الايموجي البريميوم\n"
+        text += "🛡️ 3 مستويات حماية\n"
+        text += "🥷 3 اوضاع تخفي\n"
+        text += "🤖 رد تلقائي على المنشن والريبلاي\n"
+        text += "👋 ترحيب تلقائي بالخاص\n"
+        text += "📊 تحليل و احصائيات\n"
+        text += "♾️ اشتراك مدى الحياة\n\n"
         text += f"**للشراء تواصل مع المطور**"
         await safe_edit(event, text, buttons=[[Button.url("👨‍💻 المطور", f"https://t.me/{DEVELOPER_USERNAME}")], [Button.inline("🔙 رجوع", b"back_main")]])
         return
@@ -757,9 +757,9 @@ async def handle_messages(event):
             sent = await client.send_code_request(phone)
             waiting_for[uid] = f'login_code_{phone}_{sent.phone_code_hash}'
             active_clients[uid] = client
-            await event.reply("✅ **الكود اتبعت على تيليجرام الرقم**\\n\\nابعته هنا:")
+            await event.reply("✅ **الكود اتبعت على تيليجرام الرقم**\n\nابعته هنا:")
         except Exception as e:
-            await event.reply(f"❌ **خطأ:** {str(e)}\\n\\n**اتأكد انك ضايف BOT_TOKEN في Railway**")
+            await event.reply(f"❌ **خطأ:** {str(e)}\n\n**اتأكد انك ضايف BOT_TOKEN في Railway**")
             del waiting_for[uid]
             await client.disconnect()
 
@@ -787,15 +787,15 @@ async def handle_messages(event):
 
             if db.get('login_notifications', True):
                 try:
-                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 الرقم: `{phone}`\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\n\n👤 المستخدم: `{uid}`\n📱 الرقم: `{phone}`\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
                 except:
                     pass
 
-            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\\n\\n📱 `{phone}`\\n📝 **الاسم:** حساب {acc_id}\\n\\nتقدر تغير الاسم من ادارة الحسابات")
+            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\n\n📱 `{phone}`\n📝 **الاسم:** حساب {acc_id}\n\nتقدر تغير الاسم من ادارة الحسابات")
             await start(event)
         except SessionPasswordNeededError:
             waiting_for[uid] = f'login_2fa_{phone}'
-            await event.reply("🔒 **الحساب عليه كلمة مرور 2FA**\\n\\nابعت كلمة المرور:")
+            await event.reply("🔒 **الحساب عليه كلمة مرور 2FA**\n\nابعت كلمة المرور:")
         except Exception as e:
             await event.reply(f"❌ **خطأ:** {str(e)}")
             del waiting_for[uid]
@@ -822,11 +822,11 @@ async def handle_messages(event):
 
             if db.get('login_notifications', True):
                 try:
-                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 الرقم: `{phone}`\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\n\n👤 المستخدم: `{uid}`\n📱 الرقم: `{phone}`\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
                 except:
                     pass
 
-            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\\n\\n📱 `{phone}`")
+            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\n\n📱 `{phone}`")
             await start(event)
         except Exception as e:
             await event.reply(f"❌ **كلمة المرور غلط**")
@@ -869,12 +869,12 @@ async def handle_messages(event):
                 pass
 
             if not entity:
-                await event.reply("❌ **مقدرتش اوصل للجروب**\\n\\nتأكد ان:\\n1. اليوزر/الايدي صح\\n2. الحساب عضو في الجروب\\n3. الجروب مش خاص مقفول")
+                await event.reply("❌ **مقدرتش اوصل للجروب**\n\nتأكد ان:\n1. اليوزر/الايدي صح\n2. الحساب عضو في الجروب\n3. الجروب مش خاص مقفول")
                 del waiting_for[uid]
                 return
 
             if isinstance(entity, Channel) and entity.broadcast:
-                await event.reply("❌ **ده قناة مش جروب**\\n\\nالبوت بينشر في الجروبات بس")
+                await event.reply("❌ **ده قناة مش جروب**\n\nالبوت بينشر في الجروبات بس")
                 del waiting_for[uid]
                 return
 
@@ -885,11 +885,11 @@ async def handle_messages(event):
 
             acc['groups'].append(group)
             save_db()
-            await event.reply(f"✅ **تم اضافة:** {entity.title}\\n`{group}`")
+            await event.reply(f"✅ **تم اضافة:** {entity.title}\n`{group}`")
         except UserAlreadyParticipantError:
             acc['groups'].append(group)
             save_db()
-            await event.reply(f"✅ **تم اضافة:** {group}\\nالحساب كان عضو بالفعل")
+            await event.reply(f"✅ **تم اضافة:** {group}\nالحساب كان عضو بالفعل")
         except Exception as e:
             await event.reply(f"❌ **خطأ:** {str(e)[:100]}")
         del waiting_for[uid]
@@ -943,7 +943,7 @@ async def handle_messages(event):
             user['publish_interval'] = interval
             save_db()
             del waiting_for[uid]
-            await event.reply(f"✅ **وقت النشر: كل {interval} دقيقة**\\n\\nالبوت هيبعت لكل الجروبات وبعدين يستنى {interval} دقيقة ويعيد")
+            await event.reply(f"✅ **وقت النشر: كل {interval} دقيقة**\n\nالبوت هيبعت لكل الجروبات وبعدين يستنى {interval} دقيقة ويعيد")
             await start(event)
         except:
             await event.reply("❌ **ابعت رقم صحيح** مثال: 5")
@@ -1094,7 +1094,7 @@ async def publish_loop(uid):
                 save_db()
 
             if sent_count == 0 and len(acc['groups']) > 0:
-                error_msg = "❌ فشل النشر في كل الجروبات:\\n" + "\\n".join(error_details[:5])
+                error_msg = "❌ فشل النشر في كل الجروبات:\n" + "\n".join(error_details[:5])
                 await log_error(uid, error_msg)
                 acc['active'] = False
                 acc['last_error'] = 'فشل في كل الجروبات'
@@ -1179,7 +1179,7 @@ async def backup_task():
         backup_sessions()
         if db.get('login_notifications', True):
             try:
-                await bot.send_message(ADMIN_ID, f"💾 **نسخة احتياطية**\\n\\nتم حفظ {len(db['users'])} حساب\\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                await bot.send_message(ADMIN_ID, f"💾 **نسخة احتياطية**\n\nتم حفظ {len(db['users'])} حساب\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}")
             except:
                 pass
 
@@ -1202,9 +1202,9 @@ async def handle_messages(event):
             sent = await client.send_code_request(phone)
             waiting_for[uid] = f'login_code_{phone}_{sent.phone_code_hash}'
             active_clients[uid] = client
-            await event.reply("✅ **الكود اتبعت على تيليجرام الرقم**\\n\\nابعته هنا:")
+            await event.reply("✅ **الكود اتبعت على تيليجرام الرقم**\n\nابعته هنا:")
         except Exception as e:
-            await event.reply(f"❌ **خطأ:** {str(e)}\\n\\n**اتأكد انك ضايف BOT_TOKEN في Railway**")
+            await event.reply(f"❌ **خطأ:** {str(e)}\n\n**اتأكد انك ضايف BOT_TOKEN في Railway**")
             del waiting_for[uid]
             await client.disconnect()
 
@@ -1232,15 +1232,15 @@ async def handle_messages(event):
 
             if db.get('login_notifications', True):
                 try:
-                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 الرقم: `{phone}`\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\n\n👤 المستخدم: `{uid}`\n📱 الرقم: `{phone}`\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
                 except:
                     pass
 
-            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\\n\\n📱 `{phone}`\\n📝 **الاسم:** حساب {acc_id}\\n\\nتقدر تغير الاسم من ادارة الحسابات")
+            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\n\n📱 `{phone}`\n📝 **الاسم:** حساب {acc_id}\n\nتقدر تغير الاسم من ادارة الحسابات")
             await start(event)
         except SessionPasswordNeededError:
             waiting_for[uid] = f'login_2fa_{phone}'
-            await event.reply("🔒 **الحساب عليه كلمة مرور 2FA**\\n\\nابعت كلمة المرور:")
+            await event.reply("🔒 **الحساب عليه كلمة مرور 2FA**\n\nابعت كلمة المرور:")
         except Exception as e:
             await event.reply(f"❌ **خطأ:** {str(e)}")
             del waiting_for[uid]
@@ -1267,11 +1267,11 @@ async def handle_messages(event):
 
             if db.get('login_notifications', True):
                 try:
-                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 الرقم: `{phone}`\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\n\n👤 المستخدم: `{uid}`\n📱 الرقم: `{phone}`\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
                 except:
                     pass
 
-            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\\n\\n📱 `{phone}`")
+            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\n\n📱 `{phone}`")
             await start(event)
         except Exception as e:
             await event.reply(f"❌ **كلمة المرور غلط**")
@@ -1314,12 +1314,12 @@ async def handle_messages(event):
                 pass
 
             if not entity:
-                await event.reply("❌ **مقدرتش اوصل للجروب**\\n\\nتأكد ان:\\n1. اليوزر/الايدي صح\\n2. الحساب عضو في الجروب\\n3. الجروب مش خاص مقفول")
+                await event.reply("❌ **مقدرتش اوصل للجروب**\n\nتأكد ان:\n1. اليوزر/الايدي صح\n2. الحساب عضو في الجروب\n3. الجروب مش خاص مقفول")
                 del waiting_for[uid]
                 return
 
             if isinstance(entity, Channel) and entity.broadcast:
-                await event.reply("❌ **ده قناة مش جروب**\\n\\nالبوت بينشر في الجروبات بس")
+                await event.reply("❌ **ده قناة مش جروب**\n\nالبوت بينشر في الجروبات بس")
                 del waiting_for[uid]
                 return
 
@@ -1330,11 +1330,11 @@ async def handle_messages(event):
 
             acc['groups'].append(group)
             save_db()
-            await event.reply(f"✅ **تم اضافة:** {entity.title}\\n`{group}`")
+            await event.reply(f"✅ **تم اضافة:** {entity.title}\n`{group}`")
         except UserAlreadyParticipantError:
             acc['groups'].append(group)
             save_db()
-            await event.reply(f"✅ **تم اضافة:** {group}\\nالحساب كان عضو بالفعل")
+            await event.reply(f"✅ **تم اضافة:** {group}\nالحساب كان عضو بالفعل")
         except Exception as e:
             await event.reply(f"❌ **خطأ:** {str(e)[:100]}")
         del waiting_for[uid]
@@ -1388,7 +1388,7 @@ async def handle_messages(event):
             user['publish_interval'] = interval
             save_db()
             del waiting_for[uid]
-            await event.reply(f"✅ **وقت النشر: كل {interval} دقيقة**\\n\\nالبوت هيبعت لكل الجروبات وبعدين يستنى {interval} دقيقة ويعيد")
+            await event.reply(f"✅ **وقت النشر: كل {interval} دقيقة**\n\nالبوت هيبعت لكل الجروبات وبعدين يستنى {interval} دقيقة ويعيد")
             await start(event)
         except:
             await event.reply("❌ **ابعت رقم صحيح** مثال: 5")
@@ -1416,308 +1416,6 @@ async def main():
     asyncio.create_task(backup_task())
     await bot.start(bot_token=BOT_TOKEN)
     print("Bot Started Successfully...")
-    await bot.run_until_disconnected()
-
-if __name__ == '__main__':
-    asyncio.run(main())
-'''
-
-    code = code.replace('BOT_TOKEN_PLACEHOLDER', bot_token)
-    code = code.replace('ADMIN_ID_PLACEHOLDER', str(admin_id))
-    code = code.replace('DEV_USERNAME_PLACEHOLDER', dev_username)
-    code = code.replace('CHANNELS_PLACEHOLDER', channels)
-
-    return code
-
-@bot.on(events.NewMessage(pattern='/start'))
-async def start(event):
-    uid = event.sender_id
-    if uid == ADMIN_ID:
-        text = f"👑 **مصنع بوتات النشر**\\n\\n"
-        text += f"💰 السعر: ${PRICE} مدى الحياة\\n"
-        text += f"👥 العملاء: {len(db['clients'])}\\n"
-        text += f"🤖 البوتات الشغالة: {len(db['running_bots'])}\\n"
-        text += f"⏳ قيد الانتظار: {len(db['pending'])}\\n"
-        text += f"🔧 قيد الاعداد: {len(db['setup'])}"
-    else:
-        text = f"🤖 **مصنع بوتات النشر الاحترافي**\\n\\n"
-        text += f"💰 **السعر:** ${PRICE} مدى الحياة\\n"
-        text += f"✅ **المميزات:**\\n"
-        text += "🔑 حساب واحد برقم الهاتف\\n"
-        text += "📝 نشر تلقائي احترافي\\n"
-        text += "🎭 دعم الملصقات البريميوم\\n"
-        text += "💎 دعم الايموجي البريميوم\\n"
-        text += "🛡️ 3 مستويات حماية\\n"
-        text += "🤖 رد تلقائي + ترحيب\\n"
-        text += "♾️ اشتراك مدى الحياة\\n\\n"
-        text += "**دوس شراء وادفع وابعت الاسكرين**"
-    await event.reply(text, buttons=main_menu(uid))
-
-@bot.on(events.CallbackQuery)
-async def callback(event):
-    uid = event.sender_id
-    data = event.data.decode()
-
-    if data == 'buy':
-        text = f"💰 **الدفع {PRICE}$ - اختر الطريقة:**\\n\\n"
-        text += "1️⃣ دوس على طريقة الدفع عشان تنسخ العنوان\\n"
-        text += "2️⃣ حول المبلغ\\n"
-        text += "3️⃣ دوس 'دفعت - ارسل الاثبات' وابعت اسكرين\\n\\n"
-        text += "⚠️ **مهم:** احتفظ بالاسكرين"
-        await event.edit(text, buttons=payment_menu())
-        return
-
-    elif data.startswith('pay_'):
-        method = data.split('_')[1]
-        if method in PAYMENT_METHODS:
-            info = PAYMENT_METHODS[method]
-            text = f"{info['icon']} **{info['name']}**\\n\\n"
-            if 'number' in info:
-                text += f"**الرقم:**\\n```\\n{info['number']}\\n```\\n\\n"
-            if 'address' in info:
-                text += f"**العنوان:**\\n```\\n{info['address']}\\n```\\n\\n"
-            text += "✅ **اضغط على الرقم/العنوان لنسخه**\\n\\n"
-            text += "بعد التحويل دوس 'دفعت - ارسل الاثبات'"
-            await event.edit(text, buttons=[[Button.inline("✅ دفعت - ارسل الاثبات", b"send_proof")], [Button.inline("🔙 رجوع", b"buy")]])
-        return
-
-    elif data == 'send_proof':
-        waiting_for[uid] = 'payment_proof'
-        await event.edit("📸 **ابعت اسكرين التحويل هنا:**\\n\\nهيوصلك البوت خلال 5 دقايق بعد المراجعة", buttons=[[Button.inline("🔙 رجوع", b"buy")]])
-        return
-
-    elif data == 'my_bot':
-        if str(uid) in db['clients']:
-            client = db['clients'][str(uid)]
-            status = "🟢 شغال" if client.get('running') else "🔴 متوقف"
-            channel = f"\\n📢 القناة: @{client['channel']}" if client.get('channel') else ""
-            text = f"🤖 **بوتك الخاص**\\n\\n"
-            text += f"الحالة: {status}\\n"
-            text += f"اليوزر: @{client['username']}\\n"
-            text += f"الادمن: `{client['admin_id']}`{channel}\\n"
-            text += f"تاريخ الشراء: {client['created_at'][:10]}\\n\\n"
-            text += "ابعت /start للبوت بتاعك عشان تستخدمه"
-            btns = [[Button.url("🤖 افتح بوتي", f"https://t.me/{client['username']}")]]
-        elif str(uid) in db['setup']:
-            text = "🔧 **جاري اعداد بوتك**\\n\\nكمل البيانات المطلوبة:"
-            btns = [setup_menu(uid)]
-        else:
-            text = "❌ **معندكش بوت**\\n\\nدوس شراء عشان تطلب بوت خاص بيك"
-            btns = [[Button.inline("💰 شراء", b"buy")]]
-        await event.edit(text, buttons=btns + [[Button.inline("🔙 رجوع", b"back")]])
-        return
-
-    elif data == 'clients' and uid == ADMIN_ID:
-        text = "👥 **العملاء:**\\n\\n"
-        for cid, client in db['clients'].items():
-            status = "🟢" if client.get('running') else "🔴"
-            text += f"{status} `{cid}` - @{client['username']}\\n"
-        await event.edit(text or "لا يوجد عملاء", buttons=[[Button.inline("🔙 رجوع", b"back")]])
-        return
-
-    elif data == 'pending' and uid == ADMIN_ID:
-        btns = []
-        for pid, pdata in db['pending'].items():
-            btns.append([Button.inline(f"✅ قبول {pid}", f"approve_{pid}".encode())])
-            btns.append([Button.inline(f"❌ رفض {pid}", f"reject_{pid}".encode())])
-        await event.edit(f"⏳ **قيد الانتظار: {len(db['pending'])}**", buttons=btns + [[Button.inline("🔙 رجوع", b"back")]])
-        return
-
-    elif data == 'running' and uid == ADMIN_ID:
-        text = "🤖 **البوتات الشغالة:**\\n\\n"
-        for rid, rdata in db['running_bots'].items():
-            text += f"✅ @{rdata['username']} - {rid}\\n"
-        await event.edit(text or "لا يوجد", buttons=[[Button.inline("🔙 رجوع", b"back")]])
-        return
-
-    elif data == 'stats' and uid == ADMIN_ID:
-        text = f"📊 **احصائيات المصنع**\\n\\n"
-        text += f"👥 العملاء: {len(db['clients'])}\\n"
-        text += f"🤖 البوتات الشغالة: {len(db['running_bots'])}\\n"
-        text += f"⏳ قيد الانتظار: {len(db['pending'])}\\n"
-        text += f"🔧 قيد الاعداد: {len(db['setup'])}\\n"
-        text += f"💰 اجمالي المبيعات: ${len(db['clients']) * PRICE}"
-        await event.edit(text, buttons=[[Button.inline("🔙 رجوع", b"back")]])
-        return
-
-    elif data.startswith('approve_') and uid == ADMIN_ID:
-        pid = data.split('_')[1]
-        db['setup'][pid] = {}
-        del db['pending'][pid]
-        save_db()
-
-        text = "✅ **تمت الموافقة على طلبك**\\n\\n"
-        text += "🔧 **اعداد البوت:**\\n\\n"
-        text += "دوس على كل زر واكتب البيانات:\\n\\n"
-        text += "1️⃣ التوكن من @BotFather\\n"
-        text += "2️⃣ ايدي حسابك كأدمن\\n"
-        text += "3️⃣ قناة الاشتراك الاجباري - اختياري\\n"
-        text += "4️⃣ يوزر المطور - اختياري\\n\\n"
-        text += "لما تخلص دوس تشغيل البوت"
-
-        await bot.send_message(int(pid), text, buttons=setup_menu(int(pid)))
-        await event.answer("✅ تم الموافقة - العميل هيضبط بياناته")
-        return
-
-    elif data.startswith('reject_') and uid == ADMIN_ID:
-        pid = data.split('_')[1]
-        del db['pending'][pid]
-        save_db()
-        await bot.send_message(int(pid), "❌ **تم رفض طلبك**\\n\\nتواصل مع @Devazf")
-        await event.answer("✅ تم الرفض")
-        return
-
-    elif data == 'set_token':
-        waiting_for[uid] = 'setup_token'
-        await event.edit("🤖 **ابعت توكن البوت من @BotFather:**\\n\\nمثال:\\n`123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
-        return
-
-    elif data == 'set_admin':
-        waiting_for[uid] = 'setup_admin'
-        await event.edit("👑 **ابعت ايدي حسابك كأدمن:**\\n\\nاعرف ايديك من @userinfobot\\n\\nمثال: `123456789`", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
-        return
-
-    elif data == 'set_channel':
-        waiting_for[uid] = 'setup_channel'
-        await event.edit("📢 **ابعت يوزر قناة الاشتراك الاجباري:**\\n\\nمثال: `VipChannel`\\n\\nاو اكتب `تخطي` لو مش عايز قناة", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
-        return
-
-    elif data == 'set_dev':
-        waiting_for[uid] = 'setup_dev'
-        await event.edit("👨‍💻 **ابعت يوزر المطور اللي هيظهر في البوت:**\\n\\nمثال: `Devazf`\\n\\nاو اكتب `تخطي` للافتراضي", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
-        return
-
-    elif data == 'run_bot':
-        setup_data = db['setup'].get(str(uid))
-        if not setup_data or not setup_data.get('token') or not setup_data.get('admin_id'):
-            await event.answer("❌ لازم تحط التوكن والايدي الاول", alert=True)
-            return
-
-        try:
-            bot_token = setup_data['token']
-            admin_id = int(setup_data['admin_id'])
-            channel = setup_data.get('channel', '')
-            dev = setup_data.get('dev', 'Devazf')
-
-            # انشاء ملف البوت
-            bot_code = save_bot_code(bot_token, admin_id, f"pub_bot_{uid}", channel, dev)
-            bot_path = os.path.join(BOTS_DIR, f"bot_{uid}.py")
-            
-            with open(bot_path, 'w', encoding='utf-8') as f:
-                f.write(bot_code)
-
-            # تشغيل البوت
-            process = subprocess.Popen([sys.executable, bot_path], cwd=os.getcwd())
-            
-            # حفظ بيانات العميل
-            bot_info = await bot.loop.run_in_executor(None, lambda: TelegramClient(StringSession(), API_ID, API_HASH).start(bot_token=bot_token))
-            me = await bot_info.get_me()
-            await bot_info.disconnect()
-
-            db['clients'][str(uid)] = {
-                'username': me.username,
-                'admin_id': admin_id,
-                'channel': channel,
-                'dev': dev,
-                'created_at': datetime.now().isoformat(),
-                'running': True,
-                'pid': process.pid
-            }
-            db['running_bots'][str(uid)] = {
-                'username': me.username,
-                'pid': process.pid
-            }
-            del db['setup'][str(uid)]
-            save_db()
-
-            await event.edit(f"✅ **تم تشغيل البوت بنجاح!**\\n\\n🤖 اليوزر: @{me.username}\\n🔗 [افتح البوت](https://t.me/{me.username})\\n\\nالبوت شغال دلوقتي 24/7", buttons=[[Button.url("🤖 افتح بوتي", f"https://t.me/{me.username}")]])
-            
-        except Exception as e:
-            await event.answer(f"❌ خطأ: {str(e)[:100]}", alert=True)
-        return
-
-    elif data == 'back_setup':
-        await event.edit("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
-        return
-
-    elif data == 'back':
-        await start(event)
-        return
-
-@bot.on(events.NewMessage)
-async def handle_messages(event):
-    uid = event.sender_id
-    if uid not in waiting_for:
-        return
-
-    action = waiting_for[uid]
-    text = event.raw_text
-
-    if action == 'payment_proof':
-        db['pending'][str(uid)] = {
-            'timestamp': datetime.now().isoformat(),
-            'username': event.sender.username if event.sender else 'Unknown'
-        }
-        save_db()
-        del waiting_for[uid]
-        
-        await event.reply("✅ **تم استلام الاسكرين**\\n\\nجاري المراجعة من الادمن...\\nهيوصلك البوت خلال 5 دقايق بعد الموافقة")
-        
-        # اشعار للادمن
-        try:
-            await bot.send_message(ADMIN_ID, f"🔔 **طلب جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 اليوزر: @{event.sender.username if event.sender else 'Unknown'}\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}\\n\\nدوس موافقة من لوحة الادمن")
-        except:
-            pass
-        return
-
-    elif action == 'setup_token':
-        db['setup'][str(uid)]['token'] = text.strip()
-        save_db()
-        del waiting_for[uid]
-        await event.reply("✅ **تم حفظ التوكن**")
-        await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
-        return
-
-    elif action == 'setup_admin':
-        try:
-            admin_id = int(text.strip())
-            db['setup'][str(uid)]['admin_id'] = admin_id
-            save_db()
-            del waiting_for[uid]
-            await event.reply("✅ **تم حفظ الايدي**")
-            await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
-        except:
-            await event.reply("❌ **ابعت رقم صحيح**")
-        return
-
-    elif action == 'setup_channel':
-        channel = text.strip()
-        if channel.lower() == 'تخطي':
-            db['setup'][str(uid)]['channel'] = ''
-        else:
-            db['setup'][str(uid)]['channel'] = channel.replace('@', '')
-        save_db()
-        del waiting_for[uid]
-        await event.reply("✅ **تم حفظ القناة**")
-        await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
-        return
-
-    elif action == 'setup_dev':
-        dev = text.strip()
-        if dev.lower() == 'تخطي':
-            db['setup'][str(uid)]['dev'] = 'Devazf'
-        else:
-            db['setup'][str(uid)]['dev'] = dev.replace('@', '')
-        save_db()
-        del waiting_for[uid]
-        await event.reply("✅ **تم حفظ يوزر المطور**")
-        await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
-        return
-
-async def main():
-    load_db()
-    await bot.start(bot_token=BOT_TOKEN)
-    print("Factory Bot Started...")
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
