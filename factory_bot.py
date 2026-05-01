@@ -2,6 +2,9 @@ import os
 import json
 import asyncio
 import subprocess
+import random  # <<< ضيف ده
+import requests
+import base64
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 
