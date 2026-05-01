@@ -18,7 +18,7 @@ GITHUB_USERNAME = 'nashrmsnah-art'
 ADMIN_ID = 154919127
 DB_FILE = 'database.json'
 BOT_PRICE = 10
-BOT_TEMPLATE_URL = 'https://raw.githubusercontent.com/nashrmsnah-art/factory_bot.py/033f5fea1eb44a3a69f8e9e86492a1f6c1863b86/bot_template.py'
+BOT_TEMPLATE_URL = 'https://github.com/nashrmsnah-art/factory_bot.py/blob/835c615afc374b1da645ddf3b747cc9f61da3033/bot-template'
 
 bot = TelegramClient('factory', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
