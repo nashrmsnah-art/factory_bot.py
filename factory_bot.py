@@ -15,7 +15,7 @@ API_HASH = '2829d6502df68cd12fab33cabf2851d2'
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN') # لازم تضيفه في Railway
 GITHUB_USERNAME = 'nashrmsnah-art' # غيره ليوزر جيتهاب بتاعك
-ADMIN_ID = 7832394974
+ADMIN_ID = 154919127
 DB_FILE = 'database.json'
 
 bot = TelegramClient('factory', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
