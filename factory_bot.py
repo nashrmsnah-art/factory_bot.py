@@ -1138,7 +1138,5 @@ def save_bot_code(bot_token, admin_id, username, required_channel, dev_username,
         " print('Saving database...')",
         " save_db()",
         " print('Done')",
-        ""])",
-        " return '\\n'.join(lines)"
-    ])
-    return '\n'.join(lines)
+        ""])"
+        return '\\n'.join(lines)
