@@ -3,11 +3,12 @@ from datetime import datetime, timedelta
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 
+# ===== بيانات المصنع - حط API جديد من my.telegram.org =====
 API_ID = 31650696
 API_HASH = "2829d6502df68cd12fab33cabf2851d2"
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 154919127
-DEVELOPER_LINK = "https://t.me/Devazf"
+DEVELOPER_LINK = "https://t.me/devazf"
 
 bot = TelegramClient('factory', API_ID, API_HASH)
 db_file = "factory_db.json"
@@ -144,7 +145,9 @@ async def factory_callback(event):
 
     if data == 'set_token':
         waiting_for[uid] = 'bot_token'
-        await event.edit('''🔑 **ارسل توكن البوت من @BotFather:**''', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        await event.edit('''🔑 **ارسل توكن البوت من @BotFather:**
+
+مثال: 1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz''', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
         return
 
     if data == 'set_admin':
@@ -204,6 +207,15 @@ async def factory_callback(event):
 
         await event.edit('⏳ **جاري انشاء البوت...**')
         try:
+            if ':' not in pending['token'] or len(pending['token']) < 40:
+                await event.reply('''❌ **التوكن غير صحيح**
+
+لازم يكون شكله كده:
+`1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz123456789`
+
+هاته من @BotFather''')
+                return
+
             duration_key = pending.get('duration', '1m')
             expiry_date = (datetime.now() + timedelta(days=DURATIONS[duration_key]['days'])).isoformat()
 
@@ -260,9 +272,26 @@ async def factory_callback(event):
 
 ⚠️ **البوت هيقف تلقائياً بعد انتهاء الصلاحية**''', file=filename)
         except Exception as e:
-            await event.reply(f'''❌ **خطأ:** {str(e)}
+            error_msg = str(e)
+            if 'AccessTokenInvalidError' in error_msg or 'Unauthorized' in error_msg:
+                error_text = '''❌ **التوكن غلط او منتهي**
 
-تأكد من التوكن''')
+1. روح @BotFather
+2. /mybots → اختار البوت
+3. API Token → Revoke current token
+4. انسخ التوكن الجديد'''
+            elif 'ApiIdInvalidError' in error_msg:
+                error_text = '❌ **API_ID بتاع المصنع نفسه فيه مشكلة - كلم المطور**'
+            else:
+                error_text = f'''❌ **حصل خطأ:**
+
+`{error_msg[:100]}`
+
+تأكد من:
+1. التوكن صحيح
+2. البوت مش محذوف من @BotFather'''
+
+            await event.reply(error_text)
         return
 
     if data == 'my_bots':
@@ -305,7 +334,6 @@ async def factory_callback(event):
         bot_username = data.replace('toggle_bot_', '')
         if bot_username in db['all_bots']:
             db['all_bots'][bot_username]['disabled'] = not db['all_bots'][bot_username].get('disabled', False)
-            # حدث في بوتات العميل كمان
             for user_id, user_data in db['users'].items():
                 for b in user_data.get('bots', []):
                     if b['username'] == bot_username:
@@ -313,7 +341,7 @@ async def factory_callback(event):
             save_db()
             status = 'موقوف ⛔' if db['all_bots'][bot_username]['disabled'] else 'شغال ✅'
             await event.answer(f'تم تحديث حالة @{bot_username} - {status}', alert=True)
-            await factory_callback(event) # refresh
+            await factory_callback(event)
         return
 
     if data.startswith('gen_code_') and uid == ADMIN_ID:
@@ -414,7 +442,6 @@ async def factory_handle(event):
         return
 
     if action == 'bot_token':
-        if text.count(':')!= 1: await event.reply('❌ **توكن غلط**'); return
         db['pending_bots'][str(uid)]['token'] = text; save_db(); del waiting_for[uid]
         await event.reply('✅ **تم حفظ التوكن**'); await event.respond('''🤖 **انشاء بوت جديد**
 
