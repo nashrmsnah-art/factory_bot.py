@@ -324,46 +324,47 @@ async def start(event):
             return
 @bot.on(events.NewMessage())
 async def handle_text_input(event):
-    # متستقبلش اوامر /
     if event.raw_text.startswith('/'):
         return
         
     uid = event.sender_id
     text = event.raw_text.strip()
     
-    # لو مش مستنيين منه حاجة
     if str(uid) not in db.get('waiting_for', {}):
         return
         
     waiting = db['waiting_for'][str(uid)]
     
     if waiting == 'set_token':
-        # فحص التوكن قبل الحفظ - ده اهم جزء
         if 'users' in text.lower() or ':' not in text or len(text) < 30:
-            await event.reply('❌ **التوكن غلط!**\n\nلازم يكون شبه ده:\n`1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz`\n\nجيبه من @BotFather وابعته تاني')
+            await event.reply('❌ **التوكن غلط!**\n\nلازم يبدأ بأرقام وفيه `:`\nمثال:\n`1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz`')
             del db['waiting_for'][str(uid)]
             save_db()
             return
             
-        if str(uid) not in db.get('pending_bots', {}):
+        if 'pending_bots' not in db:
+            db['pending_bots'] = {}
+        if str(uid) not in db['pending_bots']:
             db['pending_bots'][str(uid)] = {}
         db['pending_bots'][str(uid)]['token'] = text
         del db['waiting_for'][str(uid)]
         save_db()
-        await event.reply('✅ **تم حفظ التوكن**\n\nدلوقتي دوس "ايدي الادمن"')
+        await event.reply('✅ **تم حفظ التوكن**')
         
     elif waiting == 'set_admin':
         if not text.isdigit():
-            await event.reply('❌ الايدي لازم ارقام بس\n\nجيب الايدي من @userinfobot')
+            await event.reply('❌ الايدي لازم ارقام بس')
             del db['waiting_for'][str(uid)]
             save_db()
             return
-        if str(uid) not in db.get('pending_bots', {}):
+        if 'pending_bots' not in db:
+            db['pending_bots'] = {}
+        if str(uid) not in db['pending_bots']:
             db['pending_bots'][str(uid)] = {}
         db['pending_bots'][str(uid)]['admin_id'] = text
         del db['waiting_for'][str(uid)]
         save_db()
-        await event.reply('✅ **تم حفظ ايدي الادمن**\n\nدوس "انشاء البوت" دلوقتي')
+        await event.reply('✅ **تم حفظ ايدي الادمن**')
 
     if not is_subscribed(uid):
         btns = [
@@ -405,6 +406,38 @@ async def callback(event):
 
     elif data == 'check_sub':
         await start(event)
+        return
+
+    elif data == 'new_bot':
+        if 'pending_bots' not in db:
+            db['pending_bots'] = {}
+        db['pending_bots'][str(uid)] = {}
+        save_db()
+        btns = [
+            [Button.inline("🔑 توكن البوت", "ask_token")],
+            [Button.inline("👤 ايدي الادمن", "ask_admin")],
+            [Button.inline("🚀 انشاء البوت", "generate_bot")],
+            [Button.inline("🔙 رجوع", "back_main")]
+        ]
+        await event.edit("**📝 اختر خطوة:**\n\n1. ادخل توكن البوت\n2. ادخل ايدي الادمن\n3. دوس انشاء البوت", buttons=btns)
+        return
+
+    elif data == 'ask_token':
+        if 'waiting_for' not in db:
+            db['waiting_for'] = {}
+        db['waiting_for'][str(uid)] = 'set_token'
+        save_db()
+        await event.answer()
+        await event.reply('📝 **ابعت توكن البوت دلوقتي**\n\nمن @BotFather\n\nشكله:\n`1234567890:ABCdEfGhI...`')
+        return
+        
+    elif data == 'ask_admin':
+        if 'waiting_for' not in db:
+            db['waiting_for'] = {}
+        db['waiting_for'][str(uid)] = 'set_admin'
+        save_db()
+        await event.answer()
+        await event.reply('📝 **ابعت ايدي الادمن دلوقتي**\n\nمن @userinfobot')
         return
 
     elif data == 'free_trial':
