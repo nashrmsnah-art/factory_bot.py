@@ -1349,14 +1349,25 @@ async def backup_task():
                 await bot.send_message(ADMIN_ID, f"💾 **نسخة احتياطية**\n\nتم حفظ {len(db['users'])} حساب\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}")
             except:
                 pass
+async def check_disabled():
+    while True:
+        await asyncio.sleep(300)
+        if db.get('bot_config', {}).get('disabled_by_factory'):
+            print('⛔ Bot disabled by factory admin')
+            await bot.disconnect()
+            break
 
 async def main():
     load_db()
+    if datetime.now() > datetime.fromisoformat(EXPIRY_DATE):
+        print(f'❌ Bot expired on {EXPIRY_DATE}')
+        return
+    if db.get('bot_config', {}).get('disabled_by_factory'):
+        print('⛔ Bot disabled by factory admin')
+        return
+    asyncio.create_task(check_expiry())
+    asyncio.create_task(check_disabled()) # ← جديد
     asyncio.create_task(backup_task())
     await bot.start(bot_token=BOT_TOKEN)
-    print("Bot Started Successfully...")
+    print('Bot Started...')
     await bot.run_until_disconnected()
-
-if __name__ == '__main__':
-    asyncio.run(main())
-
