@@ -3,15 +3,15 @@ from datetime import datetime, timedelta
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 
-API_ID = 33595004
-API_HASH = "cbd1066ed026997f2f4a7c4323b7bda7"
+API_ID = 22043994
+API_HASH = "c13b5e1a2e8f0f6a3c6e3a1d8b5a9b0c"
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = 154919127
-DEVELOPER_LINK = "https://t.me/Devazf"
+ADMIN_ID = 7832394974
+DEVELOPER_LINK = "https://t.me/VIP1ST1"
 
 bot = TelegramClient('factory', API_ID, API_HASH)
 db_file = "factory_db.json"
-db = {"users": {}, "activation_codes": {}, "pending_bots": {}}
+db = {"users": {}, "activation_codes": {}, "pending_bots": {}, "all_bots": {}}
 waiting_for = {}
 
 DURATIONS = {
@@ -78,6 +78,7 @@ def admin_menu():
         [Button.inline('🎫 توليد كود - 3 شهور', b'gen_code_3m')],
         [Button.inline('🎫 توليد كود - 6 شهور', b'gen_code_6m')],
         [Button.inline('🎫 توليد كود - سنة', b'gen_code_1y')],
+        [Button.inline('🤖 التحكم في البوتات', b'control_bots')],
         [Button.inline('📋 كل الاكواد', b'list_codes')],
         [Button.inline('👥 كل العملاء', b'list_users')],
         [Button.inline('🔙 رجوع', b'back_main')]
@@ -89,11 +90,25 @@ async def factory_start(event):
     user = get_user(uid)
 
     if not user['activated'] and uid!= ADMIN_ID:
-        await event.reply(f'🔒 **المصنع مدفوع**\\n\\nللتفعيل اطلب كود من المطور\\n\\n👨‍💻 المطور: {DEVELOPER_LINK}', buttons=[[Button.inline('🎫 ادخال كود التفعيل', b'enter_factory_code')]])
+        await event.reply(f'''🔒 **المصنع مدفوع**
+
+للتفعيل اطلب كود من المطور
+
+👨‍💻 المطور: {DEVELOPER_LINK}''', buttons=[[Button.inline('🎫 ادخال كود التفعيل', b'enter_factory_code')]])
         return
 
     bots_left = user['bots_allowed'] - user['bots_used']
-    text = f'🏭 **مصنع بوتات النشر المتطور**\\n\\n👤 حسابك: مفعل ✅\\n🎫 كودك: `{user["activation_code"]}`\\n🤖 البوتات المسموح: {user["bots_allowed"]}\\n📊 المستخدم: {user["bots_used"]}\\n✅ المتبقي: {bots_left}\\n\\n👨‍💻 المطور: {DEVELOPER_LINK}'
+    code_text = f'`{user["activation_code"]}`' if user["activation_code"] else 'لا يوجد'
+    text = f'''🏭 **مصنع بوتات النشر المتطور**
+
+👤 حسابك: مفعل ✅
+🎫 كودك: {code_text}
+🤖 البوتات المسموح: {user["bots_allowed"]}
+📊 المستخدم: {user["bots_used"]}
+✅ المتبقي: {bots_left}
+
+👨‍💻 المطور: {DEVELOPER_LINK}'''
+
     btns = [
         [Button.inline("🤖 انشاء بوت جديد", b"create_bot")],
         [Button.inline("📊 بوتاتي", b"my_bots")],
@@ -108,7 +123,9 @@ async def factory_callback(event):
 
     if data == 'enter_factory_code':
         waiting_for[uid] = 'factory_code'
-        await event.edit('🎫 **ارسل كود تفعيل المصنع:**\\n\\nاطلبه من المطور', buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
+        await event.edit('''🎫 **ارسل كود تفعيل المصنع:**
+
+اطلبه من المطور''', buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
         return
 
     if not user['activated'] and uid!= ADMIN_ID and data!= 'back_main':
@@ -120,34 +137,49 @@ async def factory_callback(event):
             await event.answer(f'❌ {reason}', alert=True); return
         db['pending_bots'][str(uid)] = {'is_paid': False, 'duration': '1m'}
         save_db()
-        await event.edit('🤖 **انشاء بوت جديد**\\n\\nاملأ البيانات المطلوبة بالازرار:', buttons=create_bot_menu(uid))
+        await event.edit('''🤖 **انشاء بوت جديد**
+
+املأ البيانات المطلوبة بالازرار:''', buttons=create_bot_menu(uid))
         return
 
     if data == 'set_token':
         waiting_for[uid] = 'bot_token'
-        await event.edit('🔑 **ارسل توكن البوت من @BotFather:**', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        await event.edit('''🔑 **ارسل توكن البوت من @BotFather:**''', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
         return
 
     if data == 'set_admin':
         waiting_for[uid] = 'admin_id'
-        await event.edit('👑 **ارسل ايدي الادمن للبوت:**\\n\\nهاته من @userinfobot', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        await event.edit('''👑 **ارسل ايدي الادمن للبوت:**
+
+هاته من @userinfobot''', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
         return
 
     if data == 'set_dev':
         waiting_for[uid] = 'dev_username'
-        await event.edit('👨‍💻 **ارسل يوزر المطور:**\\n\\nمثال: @VIP1ST1', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        await event.edit('''👨‍💻 **ارسل يوزر المطور:**
+
+مثال: @VIP1ST1''', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
         return
 
     if data == 'set_channels':
         waiting_for[uid] = 'channels'
-        await event.edit('📢 **ارسل قنوات الاشتراك الاجباري:**\\n\\nكل قناة في سطر\\nمثال:\\n@ch1\\n@ch2\\n\\nاكتب skip للتخطي:', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        await event.edit('''📢 **ارسل قنوات الاشتراك الاجباري:**
+
+كل قناة في سطر
+مثال:
+@ch1
+@ch2
+
+اكتب skip للتخطي:''', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
         return
 
     if data == 'toggle_bot_type':
         pending = db['pending_bots'].get(str(uid), {})
         pending['is_paid'] = not pending.get('is_paid', False)
         db['pending_bots'][str(uid)] = pending; save_db()
-        await event.edit('🤖 **انشاء بوت جديد**\\n\\nاملأ البيانات المطلوبة بالازرار:', buttons=create_bot_menu(uid))
+        await event.edit('''🤖 **انشاء بوت جديد**
+
+املأ البيانات المطلوبة بالازرار:''', buttons=create_bot_menu(uid))
         return
 
     if data == 'set_duration':
@@ -157,7 +189,9 @@ async def factory_callback(event):
         next_idx = (durations.index(current) + 1) % len(durations)
         pending['duration'] = durations[next_idx]
         db['pending_bots'][str(uid)] = pending; save_db()
-        await event.edit('🤖 **انشاء بوت جديد**\\n\\nاملأ البيانات المطلوبة بالازرار:', buttons=create_bot_menu(uid))
+        await event.edit('''🤖 **انشاء بوت جديد**
+
+املأ البيانات المطلوبة بالازرار:''', buttons=create_bot_menu(uid))
         return
 
     if data == 'generate_bot':
@@ -179,7 +213,8 @@ async def factory_callback(event):
                 'DEVELOPER_LINK': pending.get('dev_username', DEVELOPER_LINK),
                 'FORCE_SUB_CHANNELS': repr(pending.get('channels', [])),
                 'IS_PAID_BOT': pending.get('is_paid', False),
-                'EXPIRY_DATE': f'"{expiry_date}"'
+                'EXPIRY_DATE': f'"{expiry_date}"',
+                'FACTORY_ADMIN_ID': ADMIN_ID
             }
             bot_code = generate_bot_file(bot_data)
             filename = f'bot_{uid}_{random.randint(1000,9999)}.py'
@@ -190,33 +225,55 @@ async def factory_callback(event):
             me = await test_client.get_me()
             await test_client.disconnect()
 
-            user['bots'].append({
+            bot_info = {
                 'username': me.username,
                 'token': pending['token'],
                 'created': datetime.now().isoformat(),
                 'is_paid': pending.get('is_paid', False),
                 'expiry': expiry_date,
-                'duration': duration_key
-            })
+                'duration': duration_key,
+                'owner_id': uid,
+                'disabled': False
+            }
+            user['bots'].append(bot_info)
+            db['all_bots'][me.username] = bot_info
             user['bots_used'] += 1
             del db['pending_bots'][str(uid)]
             save_db()
 
             bot_type = '💰 مدفوع' if pending.get('is_paid', False) else '🆓 مجاني'
             exp_date = datetime.fromisoformat(expiry_date).strftime('%Y-%m-%d')
-            await event.reply(f'✅ **تم انشاء البوت بنجاح**\\n\\n🤖 @{me.username}\\n💎 النوع: {bot_type}\\n⏰ الصلاحية: {DURATIONS[duration_key]["name"]}\\n📅 ينتهي: {exp_date}\\n\\n📁 **الملف جاهز للرفع على Railway**\\n\\n**تعليمات:**\\n1. ارفع الملف على GitHub\\n2. Railway → New Project\\n3. Variables: BOT_TOKEN = {pending["token"]}\\n4. Deploy\\n\\n⚠️ **البوت هيقف تلقائياً بعد انتهاء الصلاحية**', file=filename)
+            await event.reply(f'''✅ **تم انشاء البوت بنجاح**
+
+🤖 @{me.username}
+💎 النوع: {bot_type}
+⏰ الصلاحية: {DURATIONS[duration_key]["name"]}
+📅 ينتهي: {exp_date}
+
+📁 **الملف جاهز للرفع على Railway**
+
+**تعليمات:**
+1. ارفع الملف على GitHub
+2. Railway → New Project
+3. Variables: BOT_TOKEN = {pending["token"]}
+4. Deploy
+
+⚠️ **البوت هيقف تلقائياً بعد انتهاء الصلاحية**''', file=filename)
         except Exception as e:
-            await event.reply(f'❌ **خطأ:** {str(e)}\\n\\nتأكد من التوكن')
+            await event.reply(f'''❌ **خطأ:** {str(e)}
+
+تأكد من التوكن''')
         return
 
     if data == 'my_bots':
         if not user['bots']: await event.answer('❌ ماعندكش بوتات', alert=True); return
-        text = f'📊 **بوتاتك: {len(user["bots"])}**\\n\\n'
+        text = f'📊 **بوتاتك: {len(user["bots"])}**\n\n'
         for i, b in enumerate(user['bots']):
             b_type = '💰' if b.get('is_paid') else '🆓'
             exp = datetime.fromisoformat(b['expiry']).strftime('%Y-%m-%d')
             expired = '🔴 منتهي' if datetime.now() > datetime.fromisoformat(b['expiry']) else '🟢'
-            text += f'{i+1}. @{b["username"]} {b_type} {expired}\\n ينتهي: {exp}\\n'
+            disabled = '⛔ موقوف' if b.get('disabled') else ''
+            text += f'{i+1}. @{b["username"]} {b_type} {expired} {disabled}\n ينتهي: {exp}\n'
         await event.edit(text, buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
         return
 
@@ -224,10 +281,41 @@ async def factory_callback(event):
         code = f'VIP{random.randint(100000, 999999)}'
         db['activation_codes'][code] = {'type': 'vip', 'owner': uid, 'created': datetime.now().isoformat(), 'used': False}
         save_db()
-        await event.edit(f'🎫 **كود VIP لبوتاتك:**\\n\\n`{code}`\\n\\nاستخدمه في اي بوت صنعته /redeem', buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
+        await event.edit(f'''🎫 **كود VIP لبوتاتك:**
+
+`{code}`
+
+استخدمه في اي بوت صنعته /redeem''', buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
         return
 
-    # ازرار الادمن
+    if data == 'control_bots' and uid == ADMIN_ID:
+        if not db['all_bots']:
+            await event.answer('❌ مفيش بوتات مصنوعة لسه', alert=True); return
+        btns = []
+        for bot_username, bot_data in list(db['all_bots'].items())[-10:]:
+            status = '⛔ موقوف' if bot_data.get('disabled') else '✅ شغال'
+            btns.append([Button.inline(f'@{bot_username} - {status}', f'toggle_bot_{bot_username}')])
+        btns.append([Button.inline('🔙 رجوع', b'admin_panel')])
+        await event.edit('''🤖 **التحكم في البوتات المصنوعة**
+
+دوس على البوت عشان تقفله او تشغله:''', buttons=btns)
+        return
+
+    if data.startswith('toggle_bot_') and uid == ADMIN_ID:
+        bot_username = data.replace('toggle_bot_', '')
+        if bot_username in db['all_bots']:
+            db['all_bots'][bot_username]['disabled'] = not db['all_bots'][bot_username].get('disabled', False)
+            # حدث في بوتات العميل كمان
+            for user_id, user_data in db['users'].items():
+                for b in user_data.get('bots', []):
+                    if b['username'] == bot_username:
+                        b['disabled'] = db['all_bots'][bot_username]['disabled']
+            save_db()
+            status = 'موقوف ⛔' if db['all_bots'][bot_username]['disabled'] else 'شغال ✅'
+            await event.answer(f'تم تحديث حالة @{bot_username} - {status}', alert=True)
+            await factory_callback(event) # refresh
+        return
+
     if data.startswith('gen_code_') and uid == ADMIN_ID:
         duration_key = data.split('_')[-1]
         code = generate_code()
@@ -241,7 +329,14 @@ async def factory_callback(event):
         }
         save_db()
         await event.answer(f'✅ تم توليد كود: {code}', alert=True)
-        await event.edit(f'🎫 **كود تفعيل جديد:**\\n\\n`{code}`\\n\\n⏰ الصلاحية: {DURATIONS[duration_key]["name"]}\\n🤖 البوتات: 1 فقط\\n\\nارسله للعميل عشان يفعل المصنع', buttons=admin_menu())
+        await event.edit(f'''🎫 **كود تفعيل جديد:**
+
+`{code}`
+
+⏰ الصلاحية: {DURATIONS[duration_key]["name"]}
+🤖 البوتات: 1 فقط
+
+ارسله للعميل عشان يفعل المصنع''', buttons=admin_menu())
         return
 
     if data == 'admin_panel' and uid == ADMIN_ID:
@@ -249,26 +344,39 @@ async def factory_callback(event):
         activated = sum(1 for u in db['users'].values() if u.get('activated'))
         total_codes = len(db['activation_codes'])
         used_codes = sum(1 for c in db['activation_codes'].values() if c.get('used'))
-        text = f'👑 **لوحة ادمن المصنع**\\n\\n👥 العملاء: {len(db["users"])}\\n✅ المفعلين: {activated}\\n🤖 البوتات: {total_bots}\\n🎫 الاكواد: {used_codes}/{total_codes}'
+        disabled_bots = sum(1 for b in db['all_bots'].values() if b.get('disabled'))
+        text = f'''👑 **لوحة ادمن المصنع**
+
+👥 العملاء: {len(db["users"])}
+✅ المفعلين: {activated}
+🤖 البوتات: {total_bots}
+⛔ الموقوف: {disabled_bots}
+🎫 الاكواد: {used_codes}/{total_codes}'''
         await event.edit(text, buttons=admin_menu())
         return
 
     if data == 'list_codes' and uid == ADMIN_ID:
         unused = [(c, d) for c, d in db['activation_codes'].items() if not d.get('used')]
         used = [(c, d) for c, d in db['activation_codes'].items() if d.get('used')]
-        text = f'📋 **كل الاكواد**\\n\\n🟢 غير مستخدم: {len(unused)}\\n🔴 مستخدم: {len(used)}\\n\\n**اخر 10 غير مستخدم:**\\n'
+        text = f'''📋 **كل الاكواد**
+
+🟢 غير مستخدم: {len(unused)}
+🔴 مستخدم: {len(used)}
+
+**اخر 10 غير مستخدم:**
+'''
         for c, d in unused[-10:]:
             dur = DURATIONS.get(d.get('duration', '1m'), {'name': 'شهر'})['name']
-            text += f'`{c}` - {dur}\\n'
+            text += f'`{c}` - {dur}\n'
         await event.edit(text or 'لا يوجد', buttons=admin_menu())
         return
 
     if data == 'list_users' and uid == ADMIN_ID:
-        text = '👥 **العملاء:**\\n\\n'
+        text = '👥 **العملاء:**\n\n'
         for uid_str, u_data in list(db['users'].items())[-15:]:
             status = '✅' if u_data.get('activated') else '❌'
             bots = f"{u_data.get('bots_used', 0)}/{u_data.get('bots_allowed', 0)}"
-            text += f'{status} `{uid_str}` - {bots} بوت\\n'
+            text += f'{status} `{uid_str}` - {bots} بوت\n'
         await event.edit(text, buttons=admin_menu())
         return
 
@@ -293,36 +401,51 @@ async def factory_handle(event):
             user['bots_used'] = 0
             save_db(); del waiting_for[uid]
             dur_name = DURATIONS.get(code_data.get('duration', '1m'), {'name': 'شهر'})['name']
-            await event.reply(f'✅ **تم تفعيل المصنع بنجاح**\\n\\n⏰ الصلاحية: {dur_name}\\n🤖 البوتات المسموح: {user["bots_allowed"]}\\n\\nتقدر دلوقتي تصنع بوت'); await factory_start(event)
+            await event.reply(f'''✅ **تم تفعيل المصنع بنجاح**
+
+⏰ الصلاحية: {dur_name}
+🤖 البوتات المسموح: {user["bots_allowed"]}
+
+تقدر دلوقتي تصنع بوت'''); await factory_start(event)
         else:
-            await event.reply('❌ **كود غلط او مستخدم قبل كده**\\n\\nاطلب كود جديد من المطور')
+            await event.reply('''❌ **كود غلط او مستخدم قبل كده**
+
+اطلب كود جديد من المطور''')
         return
 
     if action == 'bot_token':
         if text.count(':')!= 1: await event.reply('❌ **توكن غلط**'); return
         db['pending_bots'][str(uid)]['token'] = text; save_db(); del waiting_for[uid]
-        await event.reply('✅ **تم حفظ التوكن**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+        await event.reply('✅ **تم حفظ التوكن**'); await event.respond('''🤖 **انشاء بوت جديد**
+
+املأ البيانات المطلوبة بالازرار:''', buttons=create_bot_menu(uid))
         return
 
     if action == 'admin_id':
         try:
             admin_id = int(text)
             db['pending_bots'][str(uid)]['admin_id'] = admin_id; save_db(); del waiting_for[uid]
-            await event.reply('✅ **تم حفظ ايدي الادمن**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+            await event.reply('✅ **تم حفظ ايدي الادمن**'); await event.respond('''🤖 **انشاء بوت جديد**
+
+املأ البيانات المطلوبة بالازرار:''', buttons=create_bot_menu(uid))
         except: await event.reply('❌ **ارسل رقم صحيح**')
         return
 
     if action == 'dev_username':
         if not text.startswith('@'): text = '@' + text
         db['pending_bots'][str(uid)]['dev_username'] = text; save_db(); del waiting_for[uid]
-        await event.reply('✅ **تم حفظ يوزر المطور**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+        await event.reply('✅ **تم حفظ يوزر المطور**'); await event.respond('''🤖 **انشاء بوت جديد**
+
+املأ البيانات المطلوبة بالازرار:''', buttons=create_bot_menu(uid))
         return
 
     if action == 'channels':
         if text.lower() == 'skip': channels = []
         else: channels = [ch.strip() for ch in text.split('\n') if ch.strip().startswith('@')]
         db['pending_bots'][str(uid)]['channels'] = channels; save_db(); del waiting_for[uid]
-        await event.reply(f'✅ **تم حفظ {len(channels)} قناة**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+        await event.reply(f'✅ **تم حفظ {len(channels)} قناة**'); await event.respond('''🤖 **انشاء بوت جديد**
+
+املأ البيانات المطلوبة بالازرار:''', buttons=create_bot_menu(uid))
         return
 
 async def main():
