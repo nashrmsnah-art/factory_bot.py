@@ -13,7 +13,7 @@ BOT_TOKEN = os.getenv('FACTORY_BOT_TOKEN')
 ADMIN_ID = 154919127
 DB_FILE = 'factory_db.json'
 BOTS_DIR = 'client_bots'
-PRICE = 15
+PRICE = 10
 
 PAYMENT_METHODS = {
     'vodafone': {'name': 'Vodafone Cash', 'number': '01010706262', 'icon': '📱'},
@@ -85,7 +85,7 @@ def setup_menu(uid):
 def save_bot_code(bot_token, admin_id, username, required_channel, dev_username):
     channels = f"['{required_channel}']" if required_channel else "[]"
 
-    code = '''from telethon import TelegramClient, events, Button
+    code = r'''from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError, UserDeactivatedBanError, UserAlreadyParticipantError
 from telethon.tl.functions.channels import GetParticipantRequest, JoinChannelRequest
@@ -376,6 +376,9 @@ async def callback(event):
     acc = get_account(uid)
 
     if data == 'back_main':
+        await start(event)
+        return
+    elif data == 'check_sub':
         await start(event)
         return
     elif data == 'add_account':
@@ -1413,6 +1416,308 @@ async def main():
     asyncio.create_task(backup_task())
     await bot.start(bot_token=BOT_TOKEN)
     print("Bot Started Successfully...")
+    await bot.run_until_disconnected()
+
+if __name__ == '__main__':
+    asyncio.run(main())
+'''
+
+    code = code.replace('BOT_TOKEN_PLACEHOLDER', bot_token)
+    code = code.replace('ADMIN_ID_PLACEHOLDER', str(admin_id))
+    code = code.replace('DEV_USERNAME_PLACEHOLDER', dev_username)
+    code = code.replace('CHANNELS_PLACEHOLDER', channels)
+
+    return code
+
+@bot.on(events.NewMessage(pattern='/start'))
+async def start(event):
+    uid = event.sender_id
+    if uid == ADMIN_ID:
+        text = f"👑 **مصنع بوتات النشر**\\n\\n"
+        text += f"💰 السعر: ${PRICE} مدى الحياة\\n"
+        text += f"👥 العملاء: {len(db['clients'])}\\n"
+        text += f"🤖 البوتات الشغالة: {len(db['running_bots'])}\\n"
+        text += f"⏳ قيد الانتظار: {len(db['pending'])}\\n"
+        text += f"🔧 قيد الاعداد: {len(db['setup'])}"
+    else:
+        text = f"🤖 **مصنع بوتات النشر الاحترافي**\\n\\n"
+        text += f"💰 **السعر:** ${PRICE} مدى الحياة\\n"
+        text += f"✅ **المميزات:**\\n"
+        text += "🔑 حساب واحد برقم الهاتف\\n"
+        text += "📝 نشر تلقائي احترافي\\n"
+        text += "🎭 دعم الملصقات البريميوم\\n"
+        text += "💎 دعم الايموجي البريميوم\\n"
+        text += "🛡️ 3 مستويات حماية\\n"
+        text += "🤖 رد تلقائي + ترحيب\\n"
+        text += "♾️ اشتراك مدى الحياة\\n\\n"
+        text += "**دوس شراء وادفع وابعت الاسكرين**"
+    await event.reply(text, buttons=main_menu(uid))
+
+@bot.on(events.CallbackQuery)
+async def callback(event):
+    uid = event.sender_id
+    data = event.data.decode()
+
+    if data == 'buy':
+        text = f"💰 **الدفع {PRICE}$ - اختر الطريقة:**\\n\\n"
+        text += "1️⃣ دوس على طريقة الدفع عشان تنسخ العنوان\\n"
+        text += "2️⃣ حول المبلغ\\n"
+        text += "3️⃣ دوس 'دفعت - ارسل الاثبات' وابعت اسكرين\\n\\n"
+        text += "⚠️ **مهم:** احتفظ بالاسكرين"
+        await event.edit(text, buttons=payment_menu())
+        return
+
+    elif data.startswith('pay_'):
+        method = data.split('_')[1]
+        if method in PAYMENT_METHODS:
+            info = PAYMENT_METHODS[method]
+            text = f"{info['icon']} **{info['name']}**\\n\\n"
+            if 'number' in info:
+                text += f"**الرقم:**\\n```\\n{info['number']}\\n```\\n\\n"
+            if 'address' in info:
+                text += f"**العنوان:**\\n```\\n{info['address']}\\n```\\n\\n"
+            text += "✅ **اضغط على الرقم/العنوان لنسخه**\\n\\n"
+            text += "بعد التحويل دوس 'دفعت - ارسل الاثبات'"
+            await event.edit(text, buttons=[[Button.inline("✅ دفعت - ارسل الاثبات", b"send_proof")], [Button.inline("🔙 رجوع", b"buy")]])
+        return
+
+    elif data == 'send_proof':
+        waiting_for[uid] = 'payment_proof'
+        await event.edit("📸 **ابعت اسكرين التحويل هنا:**\\n\\nهيوصلك البوت خلال 5 دقايق بعد المراجعة", buttons=[[Button.inline("🔙 رجوع", b"buy")]])
+        return
+
+    elif data == 'my_bot':
+        if str(uid) in db['clients']:
+            client = db['clients'][str(uid)]
+            status = "🟢 شغال" if client.get('running') else "🔴 متوقف"
+            channel = f"\\n📢 القناة: @{client['channel']}" if client.get('channel') else ""
+            text = f"🤖 **بوتك الخاص**\\n\\n"
+            text += f"الحالة: {status}\\n"
+            text += f"اليوزر: @{client['username']}\\n"
+            text += f"الادمن: `{client['admin_id']}`{channel}\\n"
+            text += f"تاريخ الشراء: {client['created_at'][:10]}\\n\\n"
+            text += "ابعت /start للبوت بتاعك عشان تستخدمه"
+            btns = [[Button.url("🤖 افتح بوتي", f"https://t.me/{client['username']}")]]
+        elif str(uid) in db['setup']:
+            text = "🔧 **جاري اعداد بوتك**\\n\\nكمل البيانات المطلوبة:"
+            btns = [setup_menu(uid)]
+        else:
+            text = "❌ **معندكش بوت**\\n\\nدوس شراء عشان تطلب بوت خاص بيك"
+            btns = [[Button.inline("💰 شراء", b"buy")]]
+        await event.edit(text, buttons=btns + [[Button.inline("🔙 رجوع", b"back")]])
+        return
+
+    elif data == 'clients' and uid == ADMIN_ID:
+        text = "👥 **العملاء:**\\n\\n"
+        for cid, client in db['clients'].items():
+            status = "🟢" if client.get('running') else "🔴"
+            text += f"{status} `{cid}` - @{client['username']}\\n"
+        await event.edit(text or "لا يوجد عملاء", buttons=[[Button.inline("🔙 رجوع", b"back")]])
+        return
+
+    elif data == 'pending' and uid == ADMIN_ID:
+        btns = []
+        for pid, pdata in db['pending'].items():
+            btns.append([Button.inline(f"✅ قبول {pid}", f"approve_{pid}".encode())])
+            btns.append([Button.inline(f"❌ رفض {pid}", f"reject_{pid}".encode())])
+        await event.edit(f"⏳ **قيد الانتظار: {len(db['pending'])}**", buttons=btns + [[Button.inline("🔙 رجوع", b"back")]])
+        return
+
+    elif data == 'running' and uid == ADMIN_ID:
+        text = "🤖 **البوتات الشغالة:**\\n\\n"
+        for rid, rdata in db['running_bots'].items():
+            text += f"✅ @{rdata['username']} - {rid}\\n"
+        await event.edit(text or "لا يوجد", buttons=[[Button.inline("🔙 رجوع", b"back")]])
+        return
+
+    elif data == 'stats' and uid == ADMIN_ID:
+        text = f"📊 **احصائيات المصنع**\\n\\n"
+        text += f"👥 العملاء: {len(db['clients'])}\\n"
+        text += f"🤖 البوتات الشغالة: {len(db['running_bots'])}\\n"
+        text += f"⏳ قيد الانتظار: {len(db['pending'])}\\n"
+        text += f"🔧 قيد الاعداد: {len(db['setup'])}\\n"
+        text += f"💰 اجمالي المبيعات: ${len(db['clients']) * PRICE}"
+        await event.edit(text, buttons=[[Button.inline("🔙 رجوع", b"back")]])
+        return
+
+    elif data.startswith('approve_') and uid == ADMIN_ID:
+        pid = data.split('_')[1]
+        db['setup'][pid] = {}
+        del db['pending'][pid]
+        save_db()
+
+        text = "✅ **تمت الموافقة على طلبك**\\n\\n"
+        text += "🔧 **اعداد البوت:**\\n\\n"
+        text += "دوس على كل زر واكتب البيانات:\\n\\n"
+        text += "1️⃣ التوكن من @BotFather\\n"
+        text += "2️⃣ ايدي حسابك كأدمن\\n"
+        text += "3️⃣ قناة الاشتراك الاجباري - اختياري\\n"
+        text += "4️⃣ يوزر المطور - اختياري\\n\\n"
+        text += "لما تخلص دوس تشغيل البوت"
+
+        await bot.send_message(int(pid), text, buttons=setup_menu(int(pid)))
+        await event.answer("✅ تم الموافقة - العميل هيضبط بياناته")
+        return
+
+    elif data.startswith('reject_') and uid == ADMIN_ID:
+        pid = data.split('_')[1]
+        del db['pending'][pid]
+        save_db()
+        await bot.send_message(int(pid), "❌ **تم رفض طلبك**\\n\\nتواصل مع @Devazf")
+        await event.answer("✅ تم الرفض")
+        return
+
+    elif data == 'set_token':
+        waiting_for[uid] = 'setup_token'
+        await event.edit("🤖 **ابعت توكن البوت من @BotFather:**\\n\\nمثال:\\n`123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
+        return
+
+    elif data == 'set_admin':
+        waiting_for[uid] = 'setup_admin'
+        await event.edit("👑 **ابعت ايدي حسابك كأدمن:**\\n\\nاعرف ايديك من @userinfobot\\n\\nمثال: `123456789`", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
+        return
+
+    elif data == 'set_channel':
+        waiting_for[uid] = 'setup_channel'
+        await event.edit("📢 **ابعت يوزر قناة الاشتراك الاجباري:**\\n\\nمثال: `VipChannel`\\n\\nاو اكتب `تخطي` لو مش عايز قناة", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
+        return
+
+    elif data == 'set_dev':
+        waiting_for[uid] = 'setup_dev'
+        await event.edit("👨‍💻 **ابعت يوزر المطور اللي هيظهر في البوت:**\\n\\nمثال: `Devazf`\\n\\nاو اكتب `تخطي` للافتراضي", buttons=[[Button.inline("🔙 رجوع", b"back_setup")]])
+        return
+
+    elif data == 'run_bot':
+        setup_data = db['setup'].get(str(uid))
+        if not setup_data or not setup_data.get('token') or not setup_data.get('admin_id'):
+            await event.answer("❌ لازم تحط التوكن والايدي الاول", alert=True)
+            return
+
+        try:
+            bot_token = setup_data['token']
+            admin_id = int(setup_data['admin_id'])
+            channel = setup_data.get('channel', '')
+            dev = setup_data.get('dev', 'Devazf')
+
+            # انشاء ملف البوت
+            bot_code = save_bot_code(bot_token, admin_id, f"pub_bot_{uid}", channel, dev)
+            bot_path = os.path.join(BOTS_DIR, f"bot_{uid}.py")
+            
+            with open(bot_path, 'w', encoding='utf-8') as f:
+                f.write(bot_code)
+
+            # تشغيل البوت
+            process = subprocess.Popen([sys.executable, bot_path], cwd=os.getcwd())
+            
+            # حفظ بيانات العميل
+            bot_info = await bot.loop.run_in_executor(None, lambda: TelegramClient(StringSession(), API_ID, API_HASH).start(bot_token=bot_token))
+            me = await bot_info.get_me()
+            await bot_info.disconnect()
+
+            db['clients'][str(uid)] = {
+                'username': me.username,
+                'admin_id': admin_id,
+                'channel': channel,
+                'dev': dev,
+                'created_at': datetime.now().isoformat(),
+                'running': True,
+                'pid': process.pid
+            }
+            db['running_bots'][str(uid)] = {
+                'username': me.username,
+                'pid': process.pid
+            }
+            del db['setup'][str(uid)]
+            save_db()
+
+            await event.edit(f"✅ **تم تشغيل البوت بنجاح!**\\n\\n🤖 اليوزر: @{me.username}\\n🔗 [افتح البوت](https://t.me/{me.username})\\n\\nالبوت شغال دلوقتي 24/7", buttons=[[Button.url("🤖 افتح بوتي", f"https://t.me/{me.username}")]])
+            
+        except Exception as e:
+            await event.answer(f"❌ خطأ: {str(e)[:100]}", alert=True)
+        return
+
+    elif data == 'back_setup':
+        await event.edit("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
+        return
+
+    elif data == 'back':
+        await start(event)
+        return
+
+@bot.on(events.NewMessage)
+async def handle_messages(event):
+    uid = event.sender_id
+    if uid not in waiting_for:
+        return
+
+    action = waiting_for[uid]
+    text = event.raw_text
+
+    if action == 'payment_proof':
+        db['pending'][str(uid)] = {
+            'timestamp': datetime.now().isoformat(),
+            'username': event.sender.username if event.sender else 'Unknown'
+        }
+        save_db()
+        del waiting_for[uid]
+        
+        await event.reply("✅ **تم استلام الاسكرين**\\n\\nجاري المراجعة من الادمن...\\nهيوصلك البوت خلال 5 دقايق بعد الموافقة")
+        
+        # اشعار للادمن
+        try:
+            await bot.send_message(ADMIN_ID, f"🔔 **طلب جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 اليوزر: @{event.sender.username if event.sender else 'Unknown'}\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}\\n\\nدوس موافقة من لوحة الادمن")
+        except:
+            pass
+        return
+
+    elif action == 'setup_token':
+        db['setup'][str(uid)]['token'] = text.strip()
+        save_db()
+        del waiting_for[uid]
+        await event.reply("✅ **تم حفظ التوكن**")
+        await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
+        return
+
+    elif action == 'setup_admin':
+        try:
+            admin_id = int(text.strip())
+            db['setup'][str(uid)]['admin_id'] = admin_id
+            save_db()
+            del waiting_for[uid]
+            await event.reply("✅ **تم حفظ الايدي**")
+            await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
+        except:
+            await event.reply("❌ **ابعت رقم صحيح**")
+        return
+
+    elif action == 'setup_channel':
+        channel = text.strip()
+        if channel.lower() == 'تخطي':
+            db['setup'][str(uid)]['channel'] = ''
+        else:
+            db['setup'][str(uid)]['channel'] = channel.replace('@', '')
+        save_db()
+        del waiting_for[uid]
+        await event.reply("✅ **تم حفظ القناة**")
+        await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
+        return
+
+    elif action == 'setup_dev':
+        dev = text.strip()
+        if dev.lower() == 'تخطي':
+            db['setup'][str(uid)]['dev'] = 'Devazf'
+        else:
+            db['setup'][str(uid)]['dev'] = dev.replace('@', '')
+        save_db()
+        del waiting_for[uid]
+        await event.reply("✅ **تم حفظ يوزر المطور**")
+        await event.respond("🔧 **اعداد البوت:**\\n\\nكمل البيانات المطلوبة:", buttons=setup_menu(uid))
+        return
+
+async def main():
+    load_db()
+    await bot.start(bot_token=BOT_TOKEN)
+    print("Factory Bot Started...")
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
