@@ -1449,6 +1449,14 @@ async def main():
     if db.get('bot_config', {}).get('disabled_by_factory'):
         print('⛔ Bot disabled by factory admin')
         return
+
+# امسح البيانات البايظة - شيل السطور دي بعد اول تشغيل
+if 'pending_bots' in db:
+    db['pending_bots'] = {}
+    save_db()
+    print("تم مسح pending_bots البايظ")
+
+asyncio.create_task(check_expiry())
     asyncio.create_task(check_expiry())
     asyncio.create_task(check_disabled()) # ← جديد
     asyncio.create_task(backup_task())
