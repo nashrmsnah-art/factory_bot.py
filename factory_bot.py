@@ -85,7 +85,7 @@ def setup_menu(uid):
 def save_bot_code(bot_token, admin_id, username, required_channel, dev_username):
     channels = f"['{required_channel}']" if required_channel else "[]"
 
-    code = f'''from telethon import TelegramClient, events, Button
+    code = '''from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError, UserDeactivatedBanError, UserAlreadyParticipantError
 from telethon.tl.functions.channels import GetParticipantRequest, JoinChannelRequest
@@ -103,7 +103,7 @@ API_HASH = 'cbd1066ed026997f2f4a7c4323b7bda7'
 BOT_TOKEN = "{bot_token}"
 ADMIN_ID = {admin_id}
 DEVELOPER_USERNAME = '{dev_username}'
-DEVELOPER_LINK = f'https://t.me/{{DEVELOPER_USERNAME}}'
+DEVELOPER_LINK = f'https://t.me/{DEVELOPER_USERNAME}'
 REQUIRED_CHANNELS = {channels}
 DB_FILE = 'db_{admin_id}.json'
 BACKUP_FILE = 'backup_{admin_id}.json'
@@ -641,13 +641,13 @@ async def callback(event):
         await event.answer(f"✅ بدأ النشر كل {{user['publish_interval']}} دقيقة", alert=True)
         await safe_edit(event, "⚙️ **اعدادات النشر الاحترافية**", buttons=pub_settings_menu(uid))
         await log_error(uid, f'🔄 تم الضغط على تشغيل - ببدأ النشر في {{len(acc["groups"])}} جروب')
-            return
+        return
     elif data == 'stop_pub':
         if acc:
             acc = get_account_defaults(acc)
             acc['active'] = False
             save_db()
-            key = f"{uid}_{user['current_account']}"
+            key = f"{{uid}}_{{user['current_account']}}"
             if key in running_tasks:
                 try:
                     running_tasks[key].cancel()
@@ -671,19 +671,19 @@ async def callback(event):
             await event.answer("❌ حدد حساب الاول", alert=True)
             return
         acc = get_account_defaults(acc)
-        text = f"📊 **تحليل {{acc['name']}}**\\n\\n"
-        text += f"📤 المرسلة: {{acc['sent_count']}}\\n"
-        text += f"👥 الجروبات: {{len(acc['groups'])}}\\n"
-        text += f"الحالة: {{'🟢 يعمل' if acc['active'] else '🔴 متوقف'}}\\n"
-        text += f"الردود المرسلة: {{len(acc['replied_to'])}}\\n"
-        text += f"الترحيبات المرسلة: {{len(user['welcome_sent'])}}\\n"
+        text = f"📊 **تحليل {acc['name']}**\\n\\n"
+        text += f"📤 المرسلة: {acc['sent_count']}\\n"
+        text += f"👥 الجروبات: {len(acc['groups'])}\\n"
+        text += f"الحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\\n"
+        text += f"الردود المرسلة: {len(acc['replied_to'])}\\n"
+        text += f"الترحيبات المرسلة: {len(user['welcome_sent'])}\\n"
         if acc['last_error']:
-            text += f"\\n⚠️ اخر خطأ: {{acc['last_error']}}"
+            text += f"\\n⚠️ اخر خطأ: {acc['last_error']}"
         text += f"\\n\\n💡 **الحالة:**\\n"
         if acc['sent_count'] == 0:
             text += "⚠️ لسه مبدأش نشر"
         elif acc['last_error']:
-            text += f"❌ في مشكلة: {{acc['last_error']}}"
+            text += f"❌ في مشكلة: {acc['last_error']}"
         else:
             text += "✅ يعمل بشكل طبيعي"
         await safe_edit(event, text, buttons=[[Button.inline("🔄 تحديث", b"analyze")], [Button.inline("🔙 رجوع", b"pub_settings")]])
