@@ -1,1143 +1,335 @@
+import os, json, asyncio, random, string
+from datetime import datetime, timedelta
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
-import asyncio
-import json
-import os
-import subprocess
-import sys
-import secrets
-import string
-from datetime import datetime
 
 API_ID = 33595004
-API_HASH = 'cbd1066ed026997f2f4a7c4323b7bda7'
-BOT_TOKEN = os.getenv('FACTORY_BOT_TOKEN')
+API_HASH = "cbd1066ed026997f2f4a7c4323b7bda7"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 154919127
-DB_FILE = 'factory_db.json'
-BOTS_DIR = 'client_bots'
-PRICE = 15
+DEVELOPER_LINK = "https://t.me/Devazf"
 
-PAYMENT_METHODS = {
-    'vodafone': {'name': 'Vodafone Cash', 'number': '01010706262', 'icon': '📱'},
-    'usdt_trc20': {'name': 'USDT TRC20', 'address': 'TWunFGpcDDc63GTDdNxyDHjZ4VdPS6AsMh', 'icon': '💎'},
-    'ton': {'name': 'TON', 'address': 'UQAarGycIaNnngwNAQ1Tek32I3MGroiaeF6p6MxEadimfszt', 'icon': '💎'},
-    'usdt_aptos': {'name': 'USDT Aptos', 'address': '83f5eede85de0d63ee219d1a5bdbbb3ff18af7fa35281aa330f55a9c8a90cf83', 'icon': '💎'}
-}
-
-bot = TelegramClient('factory_bot', API_ID, API_HASH)
-db = {'clients': {}, 'pending': {}, 'running_bots': {}, 'setup': {}, 'codes': {}}
+bot = TelegramClient('factory', API_ID, API_HASH)
+db_file = "factory_db.json"
+db = {"users": {}, "activation_codes": {}, "pending_bots": {}}
 waiting_for = {}
+
+DURATIONS = {
+    '1m': {'name': 'شهر', 'days': 30},
+    '3m': {'name': '3 شهور', 'days': 90},
+    '6m': {'name': '6 شهور', 'days': 180},
+    '1y': {'name': 'سنة', 'days': 365}
+}
 
 def load_db():
     global db
     try:
-        with open(DB_FILE, 'r', encoding='utf-8') as f:
-            db = json.load(f)
-    except:
-        save_db()
+        with open(db_file, 'r', encoding='utf-8') as f: db = json.load(f)
+    except: save_db()
 
 def save_db():
-    with open(DB_FILE, 'w', encoding='utf-8') as f:
-        json.dump(db, f, ensure_ascii=False, indent=2)
+    with open(db_file, 'w', encoding='utf-8') as f: json.dump(db, f, indent=2, ensure_ascii=False)
 
-if not os.path.exists(BOTS_DIR):
-    os.makedirs(BOTS_DIR)
+def get_user(uid):
+    uid = str(uid)
+    if uid not in db['users']:
+        db['users'][uid] = {'activated': False, 'bots': [], 'activation_code': None, 'activated_at': None, 'bots_allowed': 0, 'bots_used': 0}
+        save_db()
+    return db['users'][uid]
+
+def can_create_bot(uid):
+    user = get_user(uid)
+    if uid == ADMIN_ID: return True, None
+    if not user['activated']: return False, 'المصنع غير مفعل'
+    if user['bots_used'] >= user['bots_allowed']: return False, 'استنفذت عدد البوتات المسموح'
+    return True, None
 
 def generate_code(length=8):
-    return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(length))
+    return 'VIP-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
-def main_menu(uid):
-    if uid == ADMIN_ID:
-        return [
-            [Button.inline("👥 العملاء", b"clients"), Button.inline("⏳ قيد الانتظار", b"pending")],
-            [Button.inline("🤖 البوتات الشغالة", b"running"), Button.inline("🎫 الاكواد", b"codes")],
-            [Button.inline("📊 احصائيات", b"stats")]
-        ]
-    else:
-        return [
-            [Button.inline("💰 شراء بوت نشر $15", b"buy")],
-            [Button.inline("📊 حالة بوتي", b"my_bot")],
-            [Button.url("👨‍💻 المطور", "https://t.me/Devazf")]
-        ]
+def generate_bot_file(data):
+    with open('bot_template.py', 'r', encoding='utf-8') as f:
+        template = f.read()
+    return template.format(**data)
 
-def payment_menu():
-    btns = []
-    for key, method in PAYMENT_METHODS.items():
-        btns.append([Button.inline(f"{method['icon']} {method['name']}", f"pay_{key}".encode())])
-    btns.append([Button.inline("✅ دفعت - ارسل الاثبات", b"send_proof")])
-    btns.append([Button.inline("🔙 رجوع", b"back")])
-    return btns
-
-def setup_menu(uid):
-    data = db['setup'].get(str(uid), {})
-    token = "✅" if data.get('token') else "❌"
-    admin_id = "✅" if data.get('admin_id') else "❌"
-    channel = f"✅ @{data['channel']}" if data.get('channel') else "⚪ اختياري"
-    dev = f"✅ @{data['dev']}" if data.get('dev') else "⚪ افتراضي"
-
-    btns = [
-        [Button.inline(f"🤖 التوكن {token}", b"set_token")],
-        [Button.inline(f"👑 ايدي الادمن {admin_id}", b"set_admin")],
-        [Button.inline(f"📢 قناة الاشتراك {channel}", b"set_channel")],
-        [Button.inline(f"👨‍💻 يوزر المطور {dev}", b"set_dev")]
-    ]
-
-    if data.get('token') and data.get('admin_id'):
-        btns.append([Button.inline("✅ تشغيل البوت", b"run_bot")])
-
-    return btns
-
-def admin_client_menu(cid):
-    client = db['clients'].get(cid, {})
-    is_free = "✅ مجاني" if client.get('is_free') else "💰 مدفوع"
-    is_vip = "⭐ VIP" if client.get('is_vip') else "👤 عادي"
+def create_bot_menu(uid):
+    pending = db['pending_bots'].get(str(uid), {})
+    token = '✅ تم' if pending.get('token') else '❌ مطلوب'
+    admin = '✅ تم' if pending.get('admin_id') else '❌ مطلوب'
+    dev = pending.get('dev_username', '❌ مطلوب')
+    channels = '✅ تم' if pending.get('channels') else '➖ اختياري'
+    paid = '💰 مدفوع' if pending.get('is_paid') else '🆓 مجاني'
+    duration = DURATIONS.get(pending.get('duration'), {'name': '❌ مطلوب'})['name']
 
     return [
-        [Button.inline(f"{is_free}", f"toggle_free_{cid}".encode())],
-        [Button.inline(f"{is_vip}", f"toggle_vip_{cid}".encode())],
-        [Button.inline("🎫 صنع كود له", f"gen_code_{cid}".encode())],
-        [Button.inline("🗑️ حذف البوت", f"delete_bot_{cid}".encode())],
-        [Button.inline("🔙 رجوع", b"clients")]
+        [Button.inline(f'🔑 توكن البوت: {token}', b'set_token')],
+        [Button.inline(f'👑 ايدي الادمن: {admin}', b'set_admin')],
+        [Button.inline(f'👨‍💻 يوزر المطور: {dev}', b'set_dev')],
+        [Button.inline(f'📢 قناة الاشتراك: {channels}', b'set_channels')],
+        [Button.inline(f'💎 نوع البوت: {paid}', b'toggle_bot_type')],
+        [Button.inline(f'⏰ الصلاحية: {duration}', b'set_duration')],
+        [Button.inline('✅ انشاء البوت الآن', b'generate_bot')],
+        [Button.inline('🔙 رجوع', b'back_main')]
     ]
 
-def save_bot_code(bot_token, admin_id, username, required_channel, dev_username, client_id):
-    channels = f"['{required_channel}']" if required_channel else "[]"
+def admin_menu():
+    return [
+        [Button.inline('🎫 توليد كود - شهر', b'gen_code_1m')],
+        [Button.inline('🎫 توليد كود - 3 شهور', b'gen_code_3m')],
+        [Button.inline('🎫 توليد كود - 6 شهور', b'gen_code_6m')],
+        [Button.inline('🎫 توليد كود - سنة', b'gen_code_1y')],
+        [Button.inline('📋 كل الاكواد', b'list_codes')],
+        [Button.inline('👥 كل العملاء', b'list_users')],
+        [Button.inline('🔙 رجوع', b'back_main')]
+    ]
 
-    lines = [
-        "from telethon import TelegramClient, events, Button",
-        "from telethon.sessions import StringSession",
-        "from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError, UserDeactivatedBanError, UserAlreadyParticipantError",
-        "from telethon.tl.functions.channels import GetParticipantRequest, JoinChannelRequest",
-        "from telethon.tl.types import MessageEntityCustomEmoji, MessageEntityBold, MessageEntityItalic, MessageEntityCode, MessageEntityPre, MessageEntityTextUrl, MessageEntityUrl, Channel",
-        "from telethon.errors.rpcerrorlist import ChatWriteForbiddenError, ChatAdminRequiredError, UserBannedInChannelError, SlowModeWaitError, ChannelPrivateError, UserNotParticipantError, AuthKeyUnregisteredError, MessageNotModifiedError",
-        "import asyncio",
-        "import json",
-        "import os",
-        "from datetime import datetime, timedelta",
-        "import random",
-        "import re",
-        "",
-        "API_ID = 33595004",
-        "API_HASH = 'cbd1066ed026997f2f4a7c4323b7bda7'",
-        f"BOT_TOKEN = \"{bot_token}\"",
-        f"ADMIN_ID = {admin_id}",
-        f"DEVELOPER_USERNAME = '{dev_username}'",
-        "DEVELOPER_LINK = f'https://t.me/{DEVELOPER_USERNAME}'",
-        f"REQUIRED_CHANNELS = {channels}",
-        f"DB_FILE = 'db_{admin_id}.json'",
-        f"BACKUP_FILE = 'backup_{admin_id}.json'",
-        f"CLIENT_ID = '{client_id}'",
-        "SUB_PRICE = 5",
-        "MAX_ACCOUNTS = 1",
-        "FREE_TRIAL_DAYS = 99999",
-        "",
-        f"bot = TelegramClient('bot_{admin_id}', API_ID, API_HASH)",
-        "db = {'users': {}, 'codes': {}, 'stats': {'total_sent': 0}, 'login_notifications': True, 'bot_config': {'is_free': False, 'is_vip_only': False}}",
-        "waiting_for = {}",
-        "active_clients = {}",
-        "running_tasks = {}",
-        "user_clients = {}",
-        "reply_tasks = {}",
-        "",
-        "STEALTH_MODES = {",
-        " 'fast': {'group_delay': [2, 5], 'name': '⚡ سريع'},",
-        " 'balanced': {'group_delay': [5, 10], 'name': '⚖️ متوازن'},",
-        " 'safe': {'group_delay': [10, 20], 'name': '🛡️ آمن جدا'}",
-        "}",
-        "",
-        "def load_db():",
-        " global db",
-        " try:",
-        " with open(DB_FILE, 'r', encoding='utf-8') as f:",
-        " db = json.load(f)",
-        " except:",
-        " save_db()",
-        "",
-        "def save_db():",
-        " with open(DB_FILE, 'w', encoding='utf-8') as f:",
-        " json.dump(db, f, ensure_ascii=False, indent=2)",
-        "",
-        "def get_user_data(uid):",
-        " uid = str(uid)",
-        " if uid not in db['users']:",
-        " db['users'][uid] = {",
-        " 'sub_end': (datetime.now() + timedelta(days=36500)).isoformat(),",
-        " 'accounts': {}, 'current_account': None,",
-        " 'messages': [{'text': '', 'entities': [], 'file_id': None, 'type': 'text'}, {'text': '', 'entities': [], 'file_id': None, 'type': 'text'}],",
-        " 'publish_interval': 5, 'flood_protection': 2, 'stealth_mode': 'balanced',",
-        " 'auto_reply': False, 'auto_reply_msg': '', 'auto_reply_entities': [],",
-        " 'welcome_msg': '', 'welcome_entities': [],",
-        " 'welcome_sent': [], 'is_trial': False, 'used_trial': True,",
-        " 'is_vip': False",
-        " }",
-        " save_db()",
-        " if 'welcome_sent' not in db['users'][uid]:",
-        " db['users'][uid]['welcome_sent'] = []",
-        " if 'auto_reply_entities' not in db['users'][uid]:",
-        " db['users'][uid]['auto_reply_entities'] = []",
-        " if 'welcome_entities' not in db['users'][uid]:",
-        " db['users'][uid]['welcome_entities'] = []",
-        " if 'is_vip' not in db['users'][uid]:",
-        " db['users'][uid]['is_vip'] = False",
-        " if isinstance(db['users'][uid]['messages'][0], str):",
-        " old_msgs = db['users'][uid]['messages']",
-        " db['users'][uid]['messages'] = [",
-        " {'text': old_msgs[0] if len(old_msgs) > 0 else '', 'entities': [], 'file_id': None, 'type': 'text'},",
-        " {'text': old_msgs[1] if len(old_msgs) > 1 else '', 'entities': [], 'file_id': None, 'type': 'text'}",
-        " ]",
-        " return db['users'][uid]",
-        "",
-        "def is_subscribed(uid):",
-        " if db['bot_config'].get('is_free'):",
-        " return True",
-        " if db['bot_config'].get('is_vip_only'):",
-        " return get_user_data(uid).get('is_vip', False)",
-        " return True",
-        "",
-        "def get_account(uid):",
-        " user = get_user_data(uid)",
-        " acc_id = user.get('current_account')",
-        " if not acc_id or acc_id not in user['accounts']:",
-        " return None",
-        " return user['accounts'][acc_id]",
-        "",
-        "def get_account_defaults(acc):",
-        " defaults = {",
-        " 'active': False, 'groups': [], 'name': 'New Account',",
-        " 'phone': '', 'session': '', 'sent_count': 0,",
-        " 'last_error': None, 'created_at': datetime.now().isoformat(),",
-        " 'replied_to': []",
-        " }",
-        " for k, v in defaults.items():",
-        " if k not in acc:",
-        " acc[k] = v",
-        " return acc",
-        "",
-        "def extract_entities_from_message(message):",
-        " entities = []",
-        " if message.entities:",
-        " for ent in message.entities:",
-        " if isinstance(ent, MessageEntityCustomEmoji):",
-        " entities.append({'type': 'custom_emoji', 'offset': ent.offset, 'length': ent.length, 'document_id': ent.document_id})",
-        " elif isinstance(ent, MessageEntityBold):",
-        " entities.append({'type': 'bold', 'offset': ent.offset, 'length': ent.length})",
-        " elif isinstance(ent, MessageEntityItalic):",
-        " entities.append({'type': 'italic', 'offset': ent.offset, 'length': ent.length})",
-        " elif isinstance(ent, MessageEntityCode):",
-        " entities.append({'type': 'code', 'offset': ent.offset, 'length': ent.length})",
-        " elif isinstance(ent, MessageEntityPre):",
-        " entities.append({'type': 'pre', 'offset': ent.offset, 'length': ent.length, 'language': ent.language})",
-        " elif isinstance(ent, MessageEntityTextUrl):",
-        " entities.append({'type': 'text_url', 'offset': ent.offset, 'length': ent.length, 'url': ent.url})",
-        " elif isinstance(ent, MessageEntityUrl):",
-        " entities.append({'type': 'url', 'offset': ent.offset, 'length': ent.length})",
-        " return entities",
-        "",
-        "def build_entities(saved_entities):",
-        " entities = []",
-        " for ent in saved_entities:",
-        " if ent['type'] == 'custom_emoji':",
-        " entities.append(MessageEntityCustomEmoji(offset=ent['offset'], length=ent['length'], document_id=ent['document_id']))",
-        " elif ent['type'] == 'bold':",
-        " entities.append(MessageEntityBold(offset=ent['offset'], length=ent['length']))",
-        " elif ent['type'] == 'italic':",
-        " entities.append(MessageEntityItalic(offset=ent['offset'], length=ent['length']))",
-        " elif ent['type'] == 'code':",
-        " entities.append(MessageEntityCode(offset=ent['offset'], length=ent['length']))",
-        " elif ent['type'] == 'pre':",
-        " entities.append(MessageEntityPre(offset=ent['offset'], length=ent['length'], language=ent.get('language', '')))",
-        " elif ent['type'] == 'text_url':",
-        " entities.append(MessageEntityTextUrl(offset=ent['offset'], length=ent['length'], url=ent['url']))",
-        " elif ent['type'] == 'url':",
-        " entities.append(MessageEntityUrl(offset=ent['offset'], length=ent['length']))",
-        " return entities",
-        "",
-        "def main_menu(uid):",
-        " is_admin = uid == ADMIN_ID",
-        " btns = [",
-        " [Button.inline('📱 Add Account', b'add_account')],"
-        " [Button.inline('📱 Manage Accounts', b'accounts_menu')],"
-        " [Button.inline('⚙️ Publishing Settings', b'pub_settings'), Button.inline('📊 Analytics', b'analyze')],"
-        " [Button.inline('🔄 Start', b'start_pub'), Button.inline('⛔ Stop', b'stop_pub')],"
-        " [Button.inline('🎫 Redeem Code', b'redeem'), Button.inline('⭐ Upgrade VIP', b'upgrade_vip')],"
-        " [Button.inline('✨ Features', b'features'), Button.inline('💡 Protection Tips', b'tips')],"
-        " [Button.url('👨‍💻 Developer', DEVELOPER_LINK)]",
-        " ]",
-        " if is_admin:",
-        " btns.append([Button.inline('👑 Admin Panel', b'admin_panel')])",
-        " return btns",
-        "",
-        "def admin_menu():",
-        " status = '🟢 مجاني' if db['bot_config'].get('is_free') else '🔴 مدفوع'",
-        " vip_only = '✅ VIP فقط' if db['bot_config'].get('is_vip_only') else '❌ للكل'",
-        " notify = '🔔 مفعل' if db.get('login_notifications', True) else '🔕 معطل'",
-        " btns = [",
-        " [Button.inline(f'💰 الوضع: {status}', b'toggle_free')],"
-        " [Button.inline(f'⭐ {vip_only}', b'toggle_vip_only')],"
-        " [Button.inline('🎫 صنع كود VIP', b'gen_vip_code')],"
-        " [Button.inline('👥 الاحصائيات', b'stats'), Button.inline('📢 اذاعة', b'broadcast')],"
-        " [Button.inline(f'🔔 اشعارات الدخول: {notify}', b'toggle_notify')],"
-        " [Button.inline('🔙 رجوع', b'back_main')]",
-        " ]",
-        " return btns",
-        "",
-        "def accounts_menu(uid):",
-        " user = get_user_data(uid)",
-        " btns = []",
-        " for acc_id, acc in user['accounts'].items():",
-        " status = '🟢' if acc.get('active') else '🔴'",
-        " btns.append([Button.inline(f\"{status} {acc['name']}\", f\"select_acc_{acc_id}\".encode())])",
-        " btns.append([Button.inline('➕ Add Account', b'add_account')])",
-        " btns.append([Button.inline('🔙 Back', b'back_main')])",
-        " return btns",
-        "",
-        "def account_settings_menu(uid, acc_id):",
-        " user = get_user_data(uid)",
-        " acc = user['accounts'][acc_id]",
-        " status = '🟢 Running' if acc.get('active') else '🔴 Stopped'",
-        " btns = [",
-        " [Button.inline(f\"{status}\", b'noop')],"
-        " [Button.inline('📱 Phone', b'noop'), Button.inline(f\"{acc['phone']}\", b'noop')],"
-        " [Button.inline('✏️ Rename', f\"rename_{acc_id}\".encode()), Button.inline('🗑️ Delete', f\"del_acc_{acc_id}\".encode())],"
-        " [Button.inline('🔙 Back', b'accounts_menu')]",
-        " ]",
-        " return btns",
-        "",
-        "def pub_settings_menu(uid):",
-        " user = get_user_data(uid)",
-        " acc = get_account(uid)",
-        " if not acc:",
-        " return [[Button.inline('❌ Select Account First', b'accounts_menu')]]",
-        " acc = get_account_defaults(acc)",
-        " btns = [",
-        " [Button.inline('👥 Manage Groups', b'manage_groups')],"
-        " [Button.inline('📝 Message 1', b'msg1'), Button.inline('📝 Message 2', b'msg2')],"
-        " [Button.inline(f\"⏱️ Interval: {user['publish_interval']} min\", b'pub_interval')],"
-        " [Button.inline(f\"🛡️ Flood: {['Off', 'Low', 'Medium', 'High'][user['flood_protection']]}\", b'flood_level')],"
-        " [Button.inline(f\"🥷 Stealth: {STEALTH_MODES[user['stealth_mode']]['name']}\", b'stealth_mode')],"
-        " [Button.inline(f\"🤖 Auto Reply: {'ON' if user['auto_reply'] else 'OFF'}\", b'auto_reply')],"
-        " [Button.inline('✏️ Set Reply Msg', b'set_reply_msg'), Button.inline('👋 Set Welcome', b'set_welcome')],"
-        " [Button.inline('🗑️ Clear Replied List', b'clear_replied')],"
-        " [Button.inline('🔙 Back', b'back_main')]",
-        " ]",
-        " return btns",
-        "",
-        "async def check_channel_membership(client, user_id):",
-        " if not REQUIRED_CHANNELS:",
-        " return True",
-        " for channel in REQUIRED_CHANNELS:",
-        " try:",
-        " await client(GetParticipantRequest(channel=channel, participant=user_id))",
-        " except:",
-        " return False",
-        " return True",
-        "",
-        "async def get_user_client(uid):",
-        " user = get_user_data(uid)",
-        " acc = get_account(uid)",
-        " if not acc or not acc.get('session'):",
-        " return None",
-        " key = f\"{uid}_{user['current_account']}\"",
-        " if key in user_clients:",
-        " try:",
-        " if user_clients[key].is_connected():",
-        " return user_clients[key]",
-        " except:",
-        " pass",
-        " client = TelegramClient(StringSession(acc['session']), API_ID, API_HASH, device_model='iPhone 15 Pro', system_version='iOS 17.5', app_version='10.9.2')",
-        " await client.connect()",
-        " if await client.is_user_authorized():",
-        " user_clients[key] = client",
-        " return client",
-        " else:",
-        " await client.disconnect()",
-        " return None",
-        "",
-        "async def safe_edit(event, text, buttons=None):",
-        " try:",
-        " await event.edit(text, buttons=buttons)",
-        " except MessageNotModifiedError:",
-        " pass",
-        " except:",
-        " await event.respond(text, buttons=buttons)",
-        "",
-        "async def log_error(uid, msg):",
-        " try:",
-        " await bot.send_message(uid, f\"⚠️ **Log**\\n\\n{msg}\")",
-        " except:",
-        " pass",
-        "",
-        "async def backup_task():",
-        " while True:",
-        " await asyncio.sleep(86400)",
-        " try:",
-        " if db.get('login_notifications', True):",
-        " await bot.send_message(ADMIN_ID, f\"💾 **Backup**\\n\\nSaved {len(db['users'])} accounts\\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}\")",
-        " except:",
-        " pass",
-        "",
-        "@bot.on(events.NewMessage(pattern='/start'))",
-        "async def start(event):",
-        " uid = event.sender_id",
-        " user = get_user_data(uid)",
-        " if REQUIRED_CHANNELS:",
-        " try:",
-        " joined = await check_channel_membership(bot, uid)",
-        " if not joined:",
-        " channels_text = '\\n'.join([f'@{ch}' for ch in REQUIRED_CHANNELS])",
-        " btns = [[Button.url(f'📢 {ch}', f'https://t.me/{ch}')] for ch in REQUIRED_CHANNELS]",
-        " btns.append([Button.inline('✅ Check', b'check_sub')])",
-        " await event.reply(f\"📢 **Subscribe First**\\n\\nJoin these channels:\\n{channels_text}\\n\\nThen click Check\", buttons=btns)",
-        " return",
-        " except:",
-        " pass",
-        " if is_subscribed(uid):",
-        " await event.reply(\"🤖 **Publisher Bot**\\n\\nWelcome! Use the buttons below:\", buttons=main_menu(uid))",
-        " else:",
-        " await event.reply(\"⭐ **VIP Only**\\n\\nThis bot is for VIP members only.\\n\\nUse /redeem to enter your code or contact admin.\", buttons=[[Button.inline('🎫 Redeem Code', b'redeem')], [Button.url('👨‍💻 Developer', DEVELOPER_LINK)]])",
-        "",
-            "@bot.on(events.CallbackQuery)",
-        "async def callback(event):",
-        " uid = event.sender_id",
-        " data = event.data.decode()",
-        " user = get_user_data(uid)",
-        " acc = get_account(uid)",
-        "",
-        " if data == 'check_sub':",
-        " if await check_channel_membership(bot, uid):",
-        " await start(event)",
-        " else:",
-        " await event.answer('❌ Not subscribed yet', alert=True)",
-        " return",
-        " elif data == 'redeem':",
-        " waiting_for[uid] = 'redeem_code'",
-        " await safe_edit(event, '🎫 **Send your VIP code:**', buttons=[[Button.inline('🔙 Back', b'back_main')]])",
-        " return",
-        " elif data == 'upgrade_vip':",
-        " await safe_edit(event, '⭐ **Upgrade to VIP**\\n\\nContact admin to get VIP code:\\n\\nBenefits:\\n✅ No restrictions\\n✅ Priority support\\n✅ Lifetime access', buttons=[[Button.url('👨‍💻 Contact Admin', DEVELOPER_LINK)], [Button.inline('🔙 Back', b'back_main')]])",
-        " return",
-        " elif data == 'add_account':",
-        " if len(user['accounts']) >= MAX_ACCOUNTS:",
-        " await event.answer(f'❌ Max {MAX_ACCOUNTS} account allowed', alert=True)",
-        " return",
-        " waiting_for[uid] = 'phone_login'",
-        " await safe_edit(event, '📱 **Send phone number with country code:**\\n\\nExample: +201234567890', buttons=[[Button.inline('🔙 Back', b'accounts_menu')]])",
-        " return",
-        " elif data == 'accounts_menu':",
-        " await safe_edit(event, '📱 **Your Accounts:**', buttons=accounts_menu(uid))",
-        " return",
-        " elif data.startswith('select_acc_'):",
-        " acc_id = data.split('_')[2]",
-        " user['current_account'] = acc_id",
-        " save_db()",
-        " acc = user['accounts'][acc_id]",
-        " await safe_edit(event, f\"⚙️ **{acc['name']}**\", buttons=account_settings_menu(uid, acc_id))",
-        " return",
-        " elif data.startswith('rename_'):",
-        " acc_id = data.split('_')[1]",
-        " waiting_for[uid] = f'rename_{acc_id}'",
-        " await safe_edit(event, '✏️ **Send new name:**', buttons=[[Button.inline('🔙 Back', f'select_acc_{acc_id}'.encode())]])",
-        " return",
-        " elif data.startswith('del_acc_'):",
-        " acc_id = data.split('_')[2]",
-        " if acc_id in user['accounts']:",
-        " del user['accounts'][acc_id]",
-        " if user['current_account'] == acc_id:",
-        " user['current_account'] = None",
-        " save_db()",
-        " await event.answer('✅ Deleted', alert=True)",
-        " await safe_edit(event, '📱 **Your Accounts:**', buttons=accounts_menu(uid))",
-        " return",
-        " elif data == 'pub_settings':",
-        " if not is_subscribed(uid):",
-        " await event.answer('❌ VIP Only', alert=True)",
-        " return",
-        " if not acc:",
-        " await event.answer('❌ Select account first', alert=True)",
-        " return",
-        " await safe_edit(event, '⚙️ **Publishing Settings**', buttons=pub_settings_menu(uid))",
-        " return",
-        " elif data == 'manage_groups':",
-        " if not acc:",
-        " await event.answer('❌ No account', alert=True)",
-        " return",
-        " acc = get_account_defaults(acc)",
-        " groups_text = '\\n'.join([f'{i+1}. {g}' for i, g in enumerate(acc['groups'])]) or 'None'",
-        " btns = [[Button.inline('➕ Add Group', b'add_group')], [Button.inline('🗑️ Delete Group', b'del_group')], [Button.inline('🔙 Back', b'pub_settings')]]",
-        " await safe_edit(event, f\"👥 **Groups: {len(acc['groups'])}**\\n\\n{groups_text}\", buttons=btns)",
-        " return",
-        " elif data == 'add_group':",
-        " waiting_for[uid] = 'add_group'",
-        " await safe_edit(event, '➕ **Send group username or ID:**\\n\\nExample: @groupname or -100123456789', buttons=[[Button.inline('🔙 Back', b'manage_groups')]])",
-        " return",
-        " elif data == 'del_group':",
-        " if not acc or not acc.get('groups'):",
-        " await event.answer('❌ No groups', alert=True)",
-        " return",
-        " waiting_for[uid] = 'del_group'",
-        " groups_text = '\\n'.join([f'{i+1}. {g}' for i, g in enumerate(acc['groups'])])",
-        " await safe_edit(event, f'🗑️ **Send group number to delete:**\\n\\n{groups_text}', buttons=[[Button.inline('🔙 Back', b'manage_groups')]])",
-        " return",
-        " elif data == 'msg1':",
-        " waiting_for[uid] = 'msg1'",
-        " await safe_edit(event, '📝 **Send Message 1:**\\n\\nSupports text, stickers, and premium emojis', buttons=[[Button.inline('🔙 Back', b'pub_settings')]])",
-        " return",
-        " elif data == 'msg2':",
-        " waiting_for[uid] = 'msg2'",
-        " await safe_edit(event, '📝 **Send Message 2:**\\n\\nSupports text, stickers, and premium emojis', buttons=[[Button.inline('🔙 Back', b'pub_settings')]])",
-        " return",
-        " elif data == 'pub_interval':",
-        " waiting_for[uid] = 'pub_interval'",
-        " await safe_edit(event, '⏱️ **Send interval in minutes:**\\n\\nMin: 1 minute\\nExample: 5', buttons=[[Button.inline('🔙 Back', b'pub_settings')]])",
-        " return",
-        " elif data == 'flood_level':",
-        " user['flood_protection'] = (user['flood_protection'] + 1) % 4",
-        " save_db()",
-        " await event.answer(f\"✅ Flood: {['Off', 'Low', 'Medium', 'High'][user['flood_protection']]}\")",
-        " await safe_edit(event, '⚙️ **Publishing Settings**', buttons=pub_settings_menu(uid))",
-        " return",
-        " elif data == 'stealth_mode':",
-        " modes = list(STEALTH_MODES.keys())",
-        " current = modes.index(user['stealth_mode'])",
-        " user['stealth_mode'] = modes[(current + 1) % len(modes)]",
-        " save_db()",
-        " await event.answer(f\"✅ {STEALTH_MODES[user['stealth_mode']]['name']}\")",
-        " await safe_edit(event, '⚙️ **Publishing Settings**', buttons=pub_settings_menu(uid))",
-        " return",
-        " elif data == 'auto_reply':",
-        " user['auto_reply'] = not user['auto_reply']",
-        " save_db()",
-        " status = 'ON' if user['auto_reply'] else 'OFF'",
-        " await event.answer(f'✅ Auto Reply: {status}')",
-        " if user['auto_reply']:",
-        " if uid not in reply_tasks:",
-        " reply_tasks[uid] = asyncio.create_task(auto_reply_handler(uid))",
-        " else:",
-        " if uid in reply_tasks:",
-        " reply_tasks[uid].cancel()",
-        " del reply_tasks[uid]",
-        " await safe_edit(event, '⚙️ **Publishing Settings**', buttons=pub_settings_menu(uid))",
-        " return",
-        " elif data == 'set_reply_msg':",
-        " waiting_for[uid] = 'reply_msg'",
-        " await safe_edit(event, '✏️ **Send auto reply message:**\\n\\nThis will be sent to DMs', buttons=[[Button.inline('🔙 Back', b'pub_settings')]])",
-        " return",
-        " elif data == 'set_welcome':",
-        " waiting_for[uid] = 'welcome_msg'",
-        " await safe_edit(event, '👋 **Send welcome message:**\\n\\nSent once to new DMs', buttons=[[Button.inline('🔙 Back', b'pub_settings')]])",
-        " return",
-        " elif data == 'clear_replied':",
-        " if acc:",
-        " acc['replied_to'] = []",
-        " user['welcome_sent'] = []",
-        " save_db()",
-        " await event.answer('✅ Cleared', alert=True)",
-        " return",
-        " elif data == 'start_pub':",
-        " if not is_subscribed(uid):",
-        " await event.answer('❌ VIP Only', alert=True)",
-        " return",
-        " if not acc:",
-        " await event.answer('❌ Select account', alert=True)",
-        " return",
-        " acc = get_account_defaults(acc)",
-        " if not acc['groups']:",
-        " await event.answer('❌ Add groups first', alert=True)",
-        " return",
-        " if not user['messages'][0]['text'] and not user['messages'][1]['text']:",
-        " await event.answer('❌ Set messages first', alert=True)",
-        " return",
-        " acc['active'] = True",
-        " save_db()",
-        " if uid not in running_tasks:",
-        " running_tasks[uid] = asyncio.create_task(publisher_task(uid))",
-        " await event.answer('✅ Started', alert=True)",
-        " await safe_edit(event, '⚙️ **Publishing Settings**', buttons=pub_settings_menu(uid))",
-        " return",
-        " elif data == 'stop_pub':",
-        " if acc:",
-        " acc['active'] = False",
-        " save_db()",
-        " if uid in running_tasks:",
-        " running_tasks[uid].cancel()",
-        " del running_tasks[uid]",
-        " await event.answer('⛔ Stopped', alert=True)",
-        " await safe_edit(event, '⚙️ **Publishing Settings**', buttons=pub_settings_menu(uid))",
-        " return",
-        " elif data == 'analyze':",
-        " if not acc:",
-        " await event.answer('❌ No account', alert=True)",
-        " return",
-        " acc = get_account_defaults(acc)",
-        " status = '🟢 Running' if acc['active'] else '🔴 Stopped'",
-        " text = f\"📊 **Analytics**\\n\\n\"",
-        " text += f\"Account: {acc['name']}\\n\"",
-        " text += f\"Status: {status}\\n\"",
-        " text += f\"Phone: {acc['phone']}\\n\"",
-        " text += f\"Groups: {len(acc['groups'])}\\n\"",
-        " text += f\"Sent: {acc['sent_count']}\\n\"",
-        " text += f\"Interval: {user['publish_interval']} min\\n\"",
-        " text += f\"Stealth: {STEALTH_MODES[user['stealth_mode']]['name']}\\n\"",
-        " text += f\"Auto Reply: {'ON' if user['auto_reply'] else 'OFF'}\\n\"",
-        " text += f\"VIP: {'Yes' if user['is_vip'] else 'No'}\\n\"",
-        " if acc['last_error']:",
-        " text += f\"\\n⚠️ Last Error: {acc['last_error'][:50]}\"",
-        " await safe_edit(event, text, buttons=[[Button.inline('🔙 Back', b'back_main')]])",
-        " return",
-        " elif data == 'features':",
-        " text = \"✨ **Features**\\n\\n\"",
-        " text += \"🔑 Single account via phone\\n\"",
-        " text += \"📝 Professional auto posting\\n\"",
-        " text += \"🎭 Premium sticker support\\n\"",
-        " text += \"💎 Premium emoji support\\n\"",
-        " text += \"🛡️ 3-level protection\\n\"",
-        " text += \"🤖 Auto reply + Welcome\\n\"",
-        " text += \"♾️ Lifetime subscription\\n\"",
-        " text += \"🎫 VIP code system\\n\"",
-        " text += \"📊 Real-time analytics\"",
-        " await safe_edit(event, text, buttons=[[Button.inline('🔙 Back', b'back_main')]])",
-        " return",
-        " elif data == 'tips':",
-        " text = \"💡 **Protection Tips**\\n\\n\"",
-        " text += \"1️⃣ Use Safe mode for new accounts\\n\"",
-        " text += \"2️⃣ Dont post same message repeatedly\\n\"",
-        " text += \"3️⃣ Increase interval if flood error\\n\"",
-        " text += \"4️⃣ Use premium emojis naturally\\n\"",
-        " text += \"5️⃣ Warm up account before heavy posting\\n\"",
-        " text += \"6️⃣ Avoid spam words\\n\"",
-        " text += \"7️⃣ Use VPN for multiple accounts\"",
-        " await safe_edit(event, text, buttons=[[Button.inline('🔙 Back', b'back_main')]])",
-        " return",
-        " elif data == 'admin_panel':",
-        " if uid!= ADMIN_ID:",
-        " await event.answer('❌ Admin only', alert=True)",
-        " return",
-        " await safe_edit(event, '👑 **Admin Panel**', buttons=admin_menu())",
-        " return",
-        " elif data == 'toggle_free':",
-        " if uid!= ADMIN_ID:",
-        " return",
-        " db['bot_config']['is_free'] = not db['bot_config'].get('is_free', False)",
-        " save_db()",
-        " await event.answer('✅ تم التغيير')",
-        " await safe_edit(event, '👑 **Admin Panel**', buttons=admin_menu())",
-        " return",
-        " elif data == 'toggle_vip_only':",
-        " if uid!= ADMIN_ID:",
-        " return",
-        " db['bot_config']['is_vip_only'] = not db['bot_config'].get('is_vip_only', False)",
-        " save_db()",
-        " await event.answer('✅ تم التغيير')",
-        " await safe_edit(event, '👑 **Admin Panel**', buttons=admin_menu())",
-        " return",
-        " elif data == 'gen_vip_code':",
-        " if uid!= ADMIN_ID:",
-        " return",
-        " code = f\"VIP{random.randint(100000, 999999)}\"",
-        " db['codes'][code] = {'type': 'vip', 'created': datetime.now().isoformat()}",
-        " save_db()",
-        " await event.answer(f'✅ كود VIP: {code}', alert=True)",
-        " return",
-        " elif data == 'toggle_notify':",
-        " if uid!= ADMIN_ID:",
-        " return",
-        " db['login_notifications'] = not db.get('login_notifications', True)",
-        " save_db()",
-        " await event.answer('✅ تم التغيير')",
-        " await safe_edit(event, '👑 **Admin Panel**', buttons=admin_menu())",
-        " return",
-        " elif data == 'stats':",
-        " if uid!= ADMIN_ID:",
-        " return",
-        " total_users = len(db['users'])",
-        " total_sent = db['stats']['total_sent']",
-        " vip_users = sum(1 for u in db['users'].values() if u.get('is_vip'))",
-        " text = f\"👥 **الاحصائيات**\\n\\n\"",
-        " text += f\"المستخدمين: {total_users}\\n\"",
-        " text += f\"VIP: {vip_users}\\n\"",
-        " text += f\"الرسائل المرسلة: {total_sent}\\n\"",
-        " text += f\"الاكواد المتاحة: {len(db['codes'])}\"",
-        " await safe_edit(event, text, buttons=[[Button.inline('🔙 رجوع', b'admin_panel')]])",
-        " return",
-        " elif data == 'broadcast':",
-        " if uid!= ADMIN_ID:",
-        " return",
-        " waiting_for[uid] = 'broadcast_msg'",
-        " await safe_edit(event, '📢 **ارسل رسالة الاذاعة:**', buttons=[[Button.inline('🔙 رجوع', b'admin_panel')]])",
-        " return",
-        " elif data == 'back_main':",
-        " await start(event)",
-        " return",
-        " elif data == 'noop':",
-        " await event.answer()",
-        " return",
-        "",
-            "@bot.on(events.NewMessage)",
-        "async def handle_messages(event):",
-        " uid = event.sender_id",
-        " if uid not in waiting_for:",
-        " return",
-        "",
-        " action = waiting_for[uid]",
-        " text = event.raw_text",
-        " user = get_user_data(uid)",
-        " acc = get_account(uid)",
-        "",
-        " if action == 'redeem_code':",
-        " code = text.strip().upper()",
-        " if code in db['codes']:",
-        " code_data = db['codes'][code]",
-        " if code_data['type'] == 'vip':",
-        " user['is_vip'] = True",
-        " del db['codes'][code]",
-        " save_db()",
-        " del waiting_for[uid]",
-        " await event.reply('⭐ **VIP Activated**\\n\\nBot works without limits')",
-        " await start(event)",
-        " else:",
-        " await event.reply('❌ **Wrong or used code**')",
-        " return",
-        " elif action == 'phone_login':",
-        " phone = text.strip()",
-        " client = TelegramClient(StringSession(), API_ID, API_HASH, device_model='iPhone 15 Pro', system_version='iOS 17.5', app_version='10.9.2')",
-        " await client.connect()",
-        " try:",
-        " sent = await client.send_code_request(phone)",
-        " waiting_for[uid] = f'login_code_{phone}_{sent.phone_code_hash}'",
-        " active_clients[uid] = client",
-        " await event.reply('✅ **Code sent to Telegram**\\n\\nSend it here:')",
-        " except Exception as e:",
-        " await event.reply(f'❌ **Error:** {str(e)}\\n\\n**Make sure BOT_TOKEN is added in Railway**')",
-        " del waiting_for[uid]",
-        " await client.disconnect()",
-        "",
-        " elif action.startswith('login_code_'):",
-        " parts = action.split('_')",
-        " phone = parts[2]",
-        " phone_code_hash = parts[3]",
-        " code = text.strip()",
-        " client = active_clients.get(uid)",
-        " try:",
-        " await client.sign_in(phone, code, phone_code_hash=phone_code_hash)",
-        " session_str = client.session.save()",
-        "",
-        " acc_id = str(len(user['accounts']) + 1)",
-        " while acc_id in user['accounts']:",
-        " acc_id = str(int(acc_id) + 1)",
-        "",
-        " user['accounts'][acc_id] = get_account_defaults({",
-        " 'phone': phone, 'session': session_str, 'name': f'Account {acc_id}'",
-        " })",
-        " user['current_account'] = acc_id",
-        " save_db()",
-        " del waiting_for[uid]",
-        " del active_clients[uid]",
-        "",
-        " if db.get('login_notifications', True):",
-        " try:",
-        " await bot.send_message(ADMIN_ID, f\"🔔 **New Login**\\n\\n👤 User: `{uid}`\\n📱 Number: `{phone}`\\n⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}\")",
-        " except:",
-        " pass",
-        "",
-        " await event.reply(f'✅ **Account added successfully**\\n\\n📱 `{phone}`\\n📝 **Name:** Account {acc_id}\\n\\nYou can rename from Manage Accounts')",
-        " await start(event)",
-        " except SessionPasswordNeededError:",
-        " waiting_for[uid] = f'login_2fa_{phone}'",
-        " await event.reply('🔒 **Account has 2FA password**\\n\\nSend the password:')",
-        " except Exception as e:",
-        " await event.reply(f'❌ **Error:** {str(e)}')",
-        " del waiting_for[uid]",
-        "",
-        " elif action.startswith('login_2fa_'):",
-        " phone = action.split('_')[2]",
-        " password = text.strip()",
-        " client = active_clients.get(uid)",
-        " try:",
-        " await client.sign_in(password=password)",
-        " session_str = client.session.save()",
-        "",
-        " acc_id = str(len(user['accounts']) + 1)",
-        " while acc_id in user['accounts']:",
-        " acc_id = str(int(acc_id) + 1)",
-        "",
-        " user['accounts'][acc_id] = get_account_defaults({",
-        " 'phone': phone, 'session': session_str, 'name': f'Account {acc_id}'",
-        " })",
-        " user['current_account'] = acc_id",
-        " save_db()",
-        " del waiting_for[uid]",
-        " del active_clients[uid]",
-        "",
-        " if db.get('login_notifications', True):",
-        " try:",
-        " await bot.send_message(ADMIN_ID, f\"🔔 **New Login**\\n\\n👤 User: `{uid}`\\n📱 Number: `{phone}`\\n⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}\")",
-        " except:",
-        " pass",
-        "",
-        " await event.reply(f'✅ **Account added successfully**\\n\\n📱 `{phone}`')",
-        " await start(event)",
-        " except Exception as e:",
-        " await event.reply(f'❌ **Wrong password**')",
-        "",
-        " elif action.startswith('rename_'):",
-        " acc_id = action.split('_')[1]",
-        " new_name = text.strip()",
-        " if acc_id in user['accounts']:",
-        " user['accounts'][acc_id]['name'] = new_name",
-        " save_db()",
-        " del waiting_for[uid]",
-        " await event.reply(f'✅ **Renamed to:** {new_name}')",
-        " await callback(await event.respond(f'select_acc_{acc_id}'.encode()))",
-        " return",
-        "",
-        " elif action == 'add_group':",
-        " group = text.strip()",
-        " acc = get_account_defaults(acc)",
-        "",
-        " if group in acc['groups']:",
-        " await event.reply('⚠️ **Already exists**')",
-        " del waiting_for[uid]",
-        " await start(event)",
-        " return",
-        "",
-        " try:",
-        " client = await get_user_client(uid)",
-        " if not client:",
-        " await event.reply('❌ **Account not connected**')",
-        " del waiting_for[uid]",
-        " return",
-        "",
-        " entity = None",
-        " try:",
-        " if group.startswith('@'):",
-        " await client(JoinChannelRequest(group))",
-        " await asyncio.sleep(2)",
-        " entity = await client.get_entity(int(group) if group.lstrip('-').isdigit() else group)",
-        " except:",
-        " pass",
-        "",
-        " if not entity:",
-        " await event.reply('❌ **Could not reach group**\\n\\nMake sure:\\n1. Username/ID is correct\\n2. Account is member\\n3. Group not private closed')",
-        " del waiting_for[uid]",
-        " return",
-        "",
-        " if isinstance(entity, Channel) and entity.broadcast:",
-        " await event.reply('❌ **This is a channel not group**\\n\\nBot publishes in groups only')",
-        " del waiting_for[uid]",
-        " return",
-        "",
-        " if not (getattr(entity, 'megagroup', False) or getattr(entity, 'gigagroup', False) or not isinstance(entity, Channel)):",
-        " await event.reply('❌ **This is not a group**')",
-        " del waiting_for[uid]",
-        " return",
-        "",
-        " acc['groups'].append(group)",
-        " save_db()",
-        " await event.reply(f'✅ **Added:** {entity.title}\\n`{group}`')",
-        " except UserAlreadyParticipantError:",
-        " acc['groups'].append(group)",
-        " save_db()",
-        " await event.reply(f'✅ **Added:** {group}\\nAccount was already member')",
-        " except Exception as e:",
-        " await event.reply(f'❌ **Error:** {str(e)[:100]}')",
-        " del waiting_for[uid]",
-        " await start(event)",
-        "",
-        " elif action == 'del_group':",
-        " try:",
-        " idx = int(text.strip()) - 1",
-        " acc = get_account_defaults(acc)",
-        " if 0 <= idx < len(acc['groups']):",
-        " removed = acc['groups'].pop(idx)",
-        " save_db()",
-        " await event.reply(f'✅ **Deleted:** {removed}')",
-        " else:",
-        " await event.reply('❌ **Wrong number**')",
-        " except:",
-        " await event.reply('❌ **Send valid number**')",
-        " del waiting_for[uid]",
-        " await start(event)",
-        "",
-        " elif action == 'msg1':",
-        " entities = extract_entities_from_message(event.message)",
-        " if event.sticker:",
-        " user['messages'][0] = {'text': '', 'entities': [], 'file_id': event.sticker.id, 'type': 'sticker'}",
-        " await event.reply(f'✅ **Sticker saved as Message 1**')",
-        " else:",
-        " user['messages'][0] = {'text': text, 'entities': entities, 'file_id': None, 'type': 'text'}",
-        " await event.reply(f'✅ **Message 1 saved**')",
-        " save_db()",
-        " del waiting_for[uid]",
-        " await start(event)",
-        "",
-        " elif action == 'msg2':",
-        " entities = extract_entities_from_message(event.message)",
-        " if event.sticker:",
-        " user['messages'][1] = {'text': '', 'entities': [], 'file_id': event.sticker.id, 'type': 'sticker'}",
-        " await event.reply(f'✅ **Sticker saved as Message 2**')",
-        " else:",
-        " user['messages'][1] = {'text': text, 'entities': entities, 'file_id': None, 'type': 'text'}",
-        " await event.reply(f'✅ **Message 2 saved**')",
-        " save_db()",
-        " del waiting_for[uid]",
-        " await start(event)",
-        "",
-        " elif action == 'pub_interval':",
-        " try:",
-        " interval = int(text.strip())",
-        " if interval < 1:",
-        " await event.reply('❌ **Minimum 1 minute**')",
-        " return",
-        " user['publish_interval'] = interval",
-        " save_db()",
-        " del waiting_for[uid]",
-        " await event.reply(f'✅ **Publish interval: every {interval} minutes**\\n\\nBot will send to all groups then wait {interval} min and repeat')",
-        " await start(event)",
-        " except:",
-        " await event.reply('❌ **Send valid number** example: 5')",
-        "",
-        " elif action == 'reply_msg':",
-        " entities = extract_entities_from_message(event.message)",
-        " user['auto_reply_msg'] = text.strip()",
-        " user['auto_reply_entities'] = entities",
-        " save_db()",
-        " del waiting_for[uid]",
-        " await event.reply(f'✅ **Auto reply message saved**')",
-        " await start(event)",
-        "",
-        " elif action == 'welcome_msg':",
-        " entities = extract_entities_from_message(event.message)",
-        " user['welcome_msg'] = text.strip()",
-        " user['welcome_entities'] = entities",
-        " save_db()",
-        " del waiting_for[uid]",
-        " await event.reply(f'✅ **Welcome message saved**')",
-        " await start(event)",
-        "",
-        " elif action == 'broadcast_msg':",
-        " if uid!= ADMIN_ID:",
-        " return",
-        " count = 0",
-        " for user_id in db['users'].keys():",
-        " try:",
-        " await bot.send_message(int(user_id), text)",
-        " count += 1",
-        " await asyncio.sleep(0.1)",
-        " except:",
-        " pass",
-        " del waiting_for[uid]",
-        " await event.reply(f'✅ **Broadcast sent to {count} users**')",
-        " await start(event)",
-        "",
-            "async def auto_reply_handler(uid):",
-        " while True:",
-        " try:",
-        " await asyncio.sleep(30)",
-        " user = get_user_data(uid)",
-        " if not user['auto_reply'] or not user['auto_reply_msg']:",
-        " continue",
-        "",
-        " client = await get_user_client(uid)",
-        " if not client:",
-        " continue",
-        "",
-        " acc = get_account(uid)",
-        " if not acc:",
-        " continue",
-        "",
-        " dialogs = await client.get_dialogs()",
-        " for dialog in dialogs:",
-        " if dialog.is_user and not dialog.entity.bot:",
-        " chat_id = dialog.entity.id",
-        " if chat_id in acc['replied_to']:",
-        " continue",
-        "",
-        " msgs = await client.get_messages(dialog.entity, limit=1)",
-        " if msgs and not msgs[0].out:",
-        " try:",
-        " if user['welcome_msg'] and chat_id not in user['welcome_sent']:",
-        " entities = build_entities(user['welcome_entities'])",
-        " await client.send_message(dialog.entity, user['welcome_msg'], formatting_entities=entities)",
-        " user['welcome_sent'].append(chat_id)",
-        " save_db()",
-        " await log_error(uid, f\"👋 Welcomed {chat_id} in DM\")",
-        " await asyncio.sleep(random.uniform(3, 8))",
-        "",
-        " entities = build_entities(user['auto_reply_entities'])",
-        " await client.send_message(dialog.entity, user['auto_reply_msg'], formatting_entities=entities)",
-        " acc['replied_to'].append(chat_id)",
-        " save_db()",
-        " await log_error(uid, f\"💬 Auto replied to {chat_id}\")",
-        " await asyncio.sleep(random.uniform(5, 15))",
-        " except Exception as e:",
-        " await log_error(uid, f\"❌ Auto reply error: {str(e)[:50]}\")",
-        " except Exception as e:",
-        " await log_error(uid, f\"❌ Auto reply handler: {str(e)[:50]}\")",
-        " await asyncio.sleep(60)",
-        "",
-        "async def publisher_task(uid):",
-        " while True:",
-        " try:",
-        " user = get_user_data(uid)",
-        " acc = get_account(uid)",
-        " if not acc or not acc.get('active'):",
-        " break",
-        "",
-        " acc = get_account_defaults(acc)",
-        " if not acc['groups']:",
-        " acc['active'] = False",
-        " save_db()",
-        " break",
-        "",
-        " client = await get_user_client(uid)",
-        " if not client:",
-        " acc['active'] = False",
-        " acc['last_error'] = 'Account disconnected'",
-        " save_db()",
-        " break",
-        "",
-        " msg_idx = 0",
-        " for group in acc['groups']:",
-        " try:",
-        " if not acc['active']:",
-        " break",
-        "",
-        " msg_data = user['messages'][msg_idx % 2]",
-        " if msg_data['type'] == 'sticker' and msg_data['file_id']:",
-        " await client.send_file(group, file=msg_data['file_id'])",
-        " elif msg_data['text']:",
-        " entities = build_entities(msg_data['entities'])",
-        " await client.send_message(group, msg_data['text'], formatting_entities=entities)",
-        " acc['sent_count'] += 1",
-        " db['stats']['total_sent'] += 1",
-        " save_db()",
-        "",
-        " delay = random.uniform(*STEALTH_MODES[user['stealth_mode']]['group_delay'])",
-        " await asyncio.sleep(delay)",
-        " msg_idx += 1",
-        "",
-        " except FloodWaitError as e:",
-        " acc['last_error'] = f'FloodWait: {e.seconds}s'",
-        " save_db()",
-        " await asyncio.sleep(e.seconds + 10)",
-        " except ChatWriteForbiddenError:",
-        " acc['last_error'] = 'Cannot write in group'",
-        " save_db()",
-        " await asyncio.sleep(5)",
-        " except ChatAdminRequiredError:",
-        " acc['last_error'] = 'Admin required'",
-        " save_db()",
-        " await asyncio.sleep(5)",
-        " except UserBannedInChannelError:",
-        " acc['last_error'] = 'Banned in group'",
-        " save_db()",
-        " await asyncio.sleep(5)",
-        " except SlowModeWaitError as e:",
-        " acc['last_error'] = f'SlowMode: {e.seconds}s'",
-        " save_db()",
-        " await asyncio.sleep(e.seconds)",
-        " except ChannelPrivateError:",
-        " acc['last_error'] = 'Group is private'",
-        " save_db()",
-        " await asyncio.sleep(5)",
-        " except UserNotParticipantError:",
-        " acc['last_error'] = 'Not in group'",
-        " save_db()",
-        " await asyncio.sleep(5)",
-        " except AuthKeyUnregisteredError:",
-        " acc['active'] = False",
-        " acc['last_error'] = 'Session expired'",
-        " save_db()",
-        " break",
-        " except Exception as e:",
-        " acc['last_error'] = str(e)[:50]",
-        " save_db()",
-        " await asyncio.sleep(5)",
-        "",
-        " await asyncio.sleep(user['publish_interval'] * 60)",
-        "",
-        " except Exception as e:",
-        " await log_error(uid, f\"Publisher error: {str(e)[:50]}\")",
-        " await asyncio.sleep(60)",
-        "",
-        "async def main():",
-        " load_db()",
-        " asyncio.create_task(backup_task())",
-        " await bot.start(bot_token=BOT_TOKEN)",
-        " print('Bot Started...')",
-        " await bot.run_until_disconnected()",
-        "",
-        "if __name__ == '__main__':",
-        " asyncio.run(main())",
-        "",
-            "# === نهاية دوال البوت ===",
-        "",
-        "# تحميل قاعدة البيانات عند البداية",
-        "load_db()",
-        "",
-        "# استرجاع الجلسات النشطة",
-        "async def restore_sessions():",
-        " for uid, user_data in db['users'].items():",
-        " for acc_id, acc in user_data.get('accounts', {}).items():",
-        " if acc.get('active'):",
-        " try:",
-        " client = TelegramClient(StringSession(acc['session']), API_ID, API_HASH)",
-        " await client.connect()",
-        " if await client.is_user_authorized():",
-        " user_clients[f\"{uid}_{acc_id}\"] = client",
-        " running_tasks[int(uid)] = asyncio.create_task(publisher_task(int(uid)))",
-        " print(f'Restored session for user {uid} account {acc_id}')",
-        " else:",
-        " acc['active'] = False",
-        " acc['last_error'] = 'Session expired on restart'",
-        " except Exception as e:",
-        " acc['active'] = False",
-        " acc['last_error'] = f'Restore failed: {str(e)[:30]}'",
-        " save_db()",
-        "",
-        "# استرجاع الرد التلقائي",
-        "async def restore_auto_reply():",
-        " for uid, user_data in db['users'].items():",
-        " if user_data.get('auto_reply') and user_data.get('auto_reply_msg'):",
-        " reply_tasks[int(uid)] = asyncio.create_task(auto_reply_handler(int(uid)))",
-        " print(f'Restored auto reply for user {uid}')",
-        "",
-        "# دالة البداية الرئيسية",
-        "async def main():",
-        " print('Loading database...')",
-        " load_db()",
-        " print(f'Loaded {len(db[\"users\"])} users')",
-        " ",
-        " print('Starting backup task...')",
-        " asyncio.create_task(backup_task())",
-        " ",
-        " print('Restoring active sessions...')",
-        " await restore_sessions()",
-        " ",
-        " print('Restoring auto reply handlers...')",
-        " await restore_auto_reply()",
-        " ",
-        " print('Starting bot...')",
-        " await bot.start(bot_token=BOT_TOKEN)",
-        " print(f'✅ Bot Started Successfully')",
-        " print(f'👑 Admin ID: {ADMIN_ID}')",
-        " print(f'📊 Total users: {len(db[\"users\"])}')",
-        " print(f'📤 Total messages sent: {db[\"stats\"][\"total_sent\"]}')",
-        " ",
-        " await bot.run_until_disconnected()",
-        "",
-        "# تشغيل البوت",
-        "if __name__ == '__main__':",
-        " try:",
-        " asyncio.run(main())",
-        " except KeyboardInterrupt:",
-        " print('\\n🛑 Bot stopped by user')",
-        " except Exception as e:",
-        " print(f'❌ Fatal error: {e}')",
-        " finally:",
-        " print('Saving database...')",
-        " save_db()",
-        " print('Done')",
-        ""
-    ])
-    return '\n'.join(lines)
+@bot.on(events.NewMessage(pattern='/start'))
+async def factory_start(event):
+    uid = event.sender_id
+    user = get_user(uid)
+
+    if not user['activated'] and uid!= ADMIN_ID:
+        await event.reply(f'🔒 **المصنع مدفوع**\\n\\nللتفعيل اطلب كود من المطور\\n\\n👨‍💻 المطور: {DEVELOPER_LINK}', buttons=[[Button.inline('🎫 ادخال كود التفعيل', b'enter_factory_code')]])
+        return
+
+    bots_left = user['bots_allowed'] - user['bots_used']
+    text = f'🏭 **مصنع بوتات النشر المتطور**\\n\\n👤 حسابك: مفعل ✅\\n🎫 كودك: `{user["activation_code"]}`\\n🤖 البوتات المسموح: {user["bots_allowed"]}\\n📊 المستخدم: {user["bots_used"]}\\n✅ المتبقي: {bots_left}\\n\\n👨‍💻 المطور: {DEVELOPER_LINK}'
+    btns = [
+        [Button.inline("🤖 انشاء بوت جديد", b"create_bot")],
+        [Button.inline("📊 بوتاتي", b"my_bots")],
+        [Button.inline("🎫 اكواد VIP لبوتاتي", b"get_vip_codes")]
+    ]
+    if uid == ADMIN_ID: btns.append([Button.inline("👑 لوحة الادمن", b"admin_panel")])
+    await event.reply(text, buttons=btns)
+
+@bot.on(events.CallbackQuery)
+async def factory_callback(event):
+    uid = event.sender_id; data = event.data.decode(); user = get_user(uid)
+
+    if data == 'enter_factory_code':
+        waiting_for[uid] = 'factory_code'
+        await event.edit('🎫 **ارسل كود تفعيل المصنع:**\\n\\nاطلبه من المطور', buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
+        return
+
+    if not user['activated'] and uid!= ADMIN_ID and data!= 'back_main':
+        await event.answer('❌ المصنع غير مفعل', alert=True); return
+
+    if data == 'create_bot':
+        can_create, reason = can_create_bot(uid)
+        if not can_create:
+            await event.answer(f'❌ {reason}', alert=True); return
+        db['pending_bots'][str(uid)] = {'is_paid': False, 'duration': '1m'}
+        save_db()
+        await event.edit('🤖 **انشاء بوت جديد**\\n\\nاملأ البيانات المطلوبة بالازرار:', buttons=create_bot_menu(uid))
+        return
+
+    if data == 'set_token':
+        waiting_for[uid] = 'bot_token'
+        await event.edit('🔑 **ارسل توكن البوت من @BotFather:**', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        return
+
+    if data == 'set_admin':
+        waiting_for[uid] = 'admin_id'
+        await event.edit('👑 **ارسل ايدي الادمن للبوت:**\\n\\nهاته من @userinfobot', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        return
+
+    if data == 'set_dev':
+        waiting_for[uid] = 'dev_username'
+        await event.edit('👨‍💻 **ارسل يوزر المطور:**\\n\\nمثال: @VIP1ST1', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        return
+
+    if data == 'set_channels':
+        waiting_for[uid] = 'channels'
+        await event.edit('📢 **ارسل قنوات الاشتراك الاجباري:**\\n\\nكل قناة في سطر\\nمثال:\\n@ch1\\n@ch2\\n\\nاكتب skip للتخطي:', buttons=[[Button.inline('🔙 رجوع', b'create_bot')]])
+        return
+
+    if data == 'toggle_bot_type':
+        pending = db['pending_bots'].get(str(uid), {})
+        pending['is_paid'] = not pending.get('is_paid', False)
+        db['pending_bots'][str(uid)] = pending; save_db()
+        await event.edit('🤖 **انشاء بوت جديد**\\n\\nاملأ البيانات المطلوبة بالازرار:', buttons=create_bot_menu(uid))
+        return
+
+    if data == 'set_duration':
+        pending = db['pending_bots'].get(str(uid), {})
+        current = pending.get('duration', '1m')
+        durations = list(DURATIONS.keys())
+        next_idx = (durations.index(current) + 1) % len(durations)
+        pending['duration'] = durations[next_idx]
+        db['pending_bots'][str(uid)] = pending; save_db()
+        await event.edit('🤖 **انشاء بوت جديد**\\n\\nاملأ البيانات المطلوبة بالازرار:', buttons=create_bot_menu(uid))
+        return
+
+    if data == 'generate_bot':
+        can_create, reason = can_create_bot(uid)
+        if not can_create:
+            await event.answer(f'❌ {reason}', alert=True); return
+        pending = db['pending_bots'].get(str(uid), {})
+        if not pending.get('token') or not pending.get('admin_id'):
+            await event.answer('❌ لازم تدخل التوكن وايدي الادمن اول', alert=True); return
+
+        await event.edit('⏳ **جاري انشاء البوت...**')
+        try:
+            duration_key = pending.get('duration', '1m')
+            expiry_date = (datetime.now() + timedelta(days=DURATIONS[duration_key]['days'])).isoformat()
+
+            bot_data = {
+                'BOT_TOKEN': pending['token'],
+                'ADMIN_ID': pending['admin_id'],
+                'DEVELOPER_LINK': pending.get('dev_username', DEVELOPER_LINK),
+                'FORCE_SUB_CHANNELS': repr(pending.get('channels', [])),
+                'IS_PAID_BOT': pending.get('is_paid', False),
+                'EXPIRY_DATE': f'"{expiry_date}"'
+            }
+            bot_code = generate_bot_file(bot_data)
+            filename = f'bot_{uid}_{random.randint(1000,9999)}.py'
+            with open(filename, 'w', encoding='utf-8') as f: f.write(bot_code)
+
+            test_client = TelegramClient(StringSession(), API_ID, API_HASH)
+            await test_client.start(bot_token=pending['token'])
+            me = await test_client.get_me()
+            await test_client.disconnect()
+
+            user['bots'].append({
+                'username': me.username,
+                'token': pending['token'],
+                'created': datetime.now().isoformat(),
+                'is_paid': pending.get('is_paid', False),
+                'expiry': expiry_date,
+                'duration': duration_key
+            })
+            user['bots_used'] += 1
+            del db['pending_bots'][str(uid)]
+            save_db()
+
+            bot_type = '💰 مدفوع' if pending.get('is_paid', False) else '🆓 مجاني'
+            exp_date = datetime.fromisoformat(expiry_date).strftime('%Y-%m-%d')
+            await event.reply(f'✅ **تم انشاء البوت بنجاح**\\n\\n🤖 @{me.username}\\n💎 النوع: {bot_type}\\n⏰ الصلاحية: {DURATIONS[duration_key]["name"]}\\n📅 ينتهي: {exp_date}\\n\\n📁 **الملف جاهز للرفع على Railway**\\n\\n**تعليمات:**\\n1. ارفع الملف على GitHub\\n2. Railway → New Project\\n3. Variables: BOT_TOKEN = {pending["token"]}\\n4. Deploy\\n\\n⚠️ **البوت هيقف تلقائياً بعد انتهاء الصلاحية**', file=filename)
+        except Exception as e:
+            await event.reply(f'❌ **خطأ:** {str(e)}\\n\\nتأكد من التوكن')
+        return
+
+    if data == 'my_bots':
+        if not user['bots']: await event.answer('❌ ماعندكش بوتات', alert=True); return
+        text = f'📊 **بوتاتك: {len(user["bots"])}**\\n\\n'
+        for i, b in enumerate(user['bots']):
+            b_type = '💰' if b.get('is_paid') else '🆓'
+            exp = datetime.fromisoformat(b['expiry']).strftime('%Y-%m-%d')
+            expired = '🔴 منتهي' if datetime.now() > datetime.fromisoformat(b['expiry']) else '🟢'
+            text += f'{i+1}. @{b["username"]} {b_type} {expired}\\n ينتهي: {exp}\\n'
+        await event.edit(text, buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
+        return
+
+    if data == 'get_vip_codes':
+        code = f'VIP{random.randint(100000, 999999)}'
+        db['activation_codes'][code] = {'type': 'vip', 'owner': uid, 'created': datetime.now().isoformat(), 'used': False}
+        save_db()
+        await event.edit(f'🎫 **كود VIP لبوتاتك:**\\n\\n`{code}`\\n\\nاستخدمه في اي بوت صنعته /redeem', buttons=[[Button.inline('🔙 رجوع', b'back_main')]])
+        return
+
+    # ازرار الادمن
+    if data.startswith('gen_code_') and uid == ADMIN_ID:
+        duration_key = data.split('_')[-1]
+        code = generate_code()
+        db['activation_codes'][code] = {
+            'type': 'factory',
+            'used': False,
+            'created': datetime.now().isoformat(),
+            'user_id': None,
+            'duration': duration_key,
+            'bots_allowed': 1
+        }
+        save_db()
+        await event.answer(f'✅ تم توليد كود: {code}', alert=True)
+        await event.edit(f'🎫 **كود تفعيل جديد:**\\n\\n`{code}`\\n\\n⏰ الصلاحية: {DURATIONS[duration_key]["name"]}\\n🤖 البوتات: 1 فقط\\n\\nارسله للعميل عشان يفعل المصنع', buttons=admin_menu())
+        return
+
+    if data == 'admin_panel' and uid == ADMIN_ID:
+        total_bots = sum(len(u.get('bots', [])) for u in db['users'].values())
+        activated = sum(1 for u in db['users'].values() if u.get('activated'))
+        total_codes = len(db['activation_codes'])
+        used_codes = sum(1 for c in db['activation_codes'].values() if c.get('used'))
+        text = f'👑 **لوحة ادمن المصنع**\\n\\n👥 العملاء: {len(db["users"])}\\n✅ المفعلين: {activated}\\n🤖 البوتات: {total_bots}\\n🎫 الاكواد: {used_codes}/{total_codes}'
+        await event.edit(text, buttons=admin_menu())
+        return
+
+    if data == 'list_codes' and uid == ADMIN_ID:
+        unused = [(c, d) for c, d in db['activation_codes'].items() if not d.get('used')]
+        used = [(c, d) for c, d in db['activation_codes'].items() if d.get('used')]
+        text = f'📋 **كل الاكواد**\\n\\n🟢 غير مستخدم: {len(unused)}\\n🔴 مستخدم: {len(used)}\\n\\n**اخر 10 غير مستخدم:**\\n'
+        for c, d in unused[-10:]:
+            dur = DURATIONS.get(d.get('duration', '1m'), {'name': 'شهر'})['name']
+            text += f'`{c}` - {dur}\\n'
+        await event.edit(text or 'لا يوجد', buttons=admin_menu())
+        return
+
+    if data == 'list_users' and uid == ADMIN_ID:
+        text = '👥 **العملاء:**\\n\\n'
+        for uid_str, u_data in list(db['users'].items())[-15:]:
+            status = '✅' if u_data.get('activated') else '❌'
+            bots = f"{u_data.get('bots_used', 0)}/{u_data.get('bots_allowed', 0)}"
+            text += f'{status} `{uid_str}` - {bots} بوت\\n'
+        await event.edit(text, buttons=admin_menu())
+        return
+
+    if data == 'back_main': await factory_start(event); return
+
+@bot.on(events.NewMessage)
+async def factory_handle(event):
+    uid = event.sender_id
+    if uid not in waiting_for: return
+    action = waiting_for[uid]; text = event.raw_text.strip()
+
+    if action == 'factory_code':
+        if text in db['activation_codes'] and not db['activation_codes'][text].get('used'):
+            code_data = db['activation_codes'][text]
+            code_data['used'] = True
+            code_data['user_id'] = uid
+            user = get_user(uid)
+            user['activated'] = True
+            user['activation_code'] = text
+            user['activated_at'] = datetime.now().isoformat()
+            user['bots_allowed'] = code_data.get('bots_allowed', 1)
+            user['bots_used'] = 0
+            save_db(); del waiting_for[uid]
+            dur_name = DURATIONS.get(code_data.get('duration', '1m'), {'name': 'شهر'})['name']
+            await event.reply(f'✅ **تم تفعيل المصنع بنجاح**\\n\\n⏰ الصلاحية: {dur_name}\\n🤖 البوتات المسموح: {user["bots_allowed"]}\\n\\nتقدر دلوقتي تصنع بوت'); await factory_start(event)
+        else:
+            await event.reply('❌ **كود غلط او مستخدم قبل كده**\\n\\nاطلب كود جديد من المطور')
+        return
+
+    if action == 'bot_token':
+        if text.count(':')!= 1: await event.reply('❌ **توكن غلط**'); return
+        db['pending_bots'][str(uid)]['token'] = text; save_db(); del waiting_for[uid]
+        await event.reply('✅ **تم حفظ التوكن**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+        return
+
+    if action == 'admin_id':
+        try:
+            admin_id = int(text)
+            db['pending_bots'][str(uid)]['admin_id'] = admin_id; save_db(); del waiting_for[uid]
+            await event.reply('✅ **تم حفظ ايدي الادمن**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+        except: await event.reply('❌ **ارسل رقم صحيح**')
+        return
+
+    if action == 'dev_username':
+        if not text.startswith('@'): text = '@' + text
+        db['pending_bots'][str(uid)]['dev_username'] = text; save_db(); del waiting_for[uid]
+        await event.reply('✅ **تم حفظ يوزر المطور**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+        return
+
+    if action == 'channels':
+        if text.lower() == 'skip': channels = []
+        else: channels = [ch.strip() for ch in text.split('\n') if ch.strip().startswith('@')]
+        db['pending_bots'][str(uid)]['channels'] = channels; save_db(); del waiting_for[uid]
+        await event.reply(f'✅ **تم حفظ {len(channels)} قناة**'); await event.respond('🤖 **انشاء بوت جديد**', buttons=create_bot_menu(uid))
+        return
+
+async def main():
+    load_db()
+    await bot.start(bot_token=BOT_TOKEN)
+    print('🏭 Factory Bot Started...')
+    await bot.run_until_disconnected()
+
+if __name__ == '__main__':
+    asyncio.run(main())
