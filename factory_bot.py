@@ -1936,6 +1936,7 @@ async def main():
     print("Factory Bot Started...")
     await bot.run_until_disconnected()
 
-if __name__ == '__main__':
-    asyncio.run(main())
-    
+        'if __name__ == "__main__":',
+        ' asyncio.run(main())',
+        ''])  # ← ده اللي بيقفل lines = [
+    return '\n'.join(lines)
