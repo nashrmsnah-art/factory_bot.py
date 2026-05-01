@@ -1138,5 +1138,6 @@ def save_bot_code(bot_token, admin_id, username, required_channel, dev_username,
         " print('Saving database...')",
         " save_db()",
         " print('Done')",
-        ""])"
-        return '\\n'.join(lines)
+        ""  # اخر سطر فاضي
+    ])  # قفلة الليست
+    return '\n'.join(lines)  # قفلة الدالة
