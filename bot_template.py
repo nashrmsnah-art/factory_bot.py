@@ -322,6 +322,48 @@ async def start(event):
                     [Button.inline("✅ تحققت", b"check_sub")]]
             await event.reply("🔒 **اشترك في القناة الاول:**", buttons=btns)
             return
+@bot.on(events.NewMessage())
+async def handle_text_input(event):
+    # متستقبلش اوامر /
+    if event.raw_text.startswith('/'):
+        return
+        
+    uid = event.sender_id
+    text = event.raw_text.strip()
+    
+    # لو مش مستنيين منه حاجة
+    if str(uid) not in db.get('waiting_for', {}):
+        return
+        
+    waiting = db['waiting_for'][str(uid)]
+    
+    if waiting == 'set_token':
+        # فحص التوكن قبل الحفظ - ده اهم جزء
+        if 'users' in text.lower() or ':' not in text or len(text) < 30:
+            await event.reply('❌ **التوكن غلط!**\n\nلازم يكون شبه ده:\n`1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz`\n\nجيبه من @BotFather وابعته تاني')
+            del db['waiting_for'][str(uid)]
+            save_db()
+            return
+            
+        if str(uid) not in db.get('pending_bots', {}):
+            db['pending_bots'][str(uid)] = {}
+        db['pending_bots'][str(uid)]['token'] = text
+        del db['waiting_for'][str(uid)]
+        save_db()
+        await event.reply('✅ **تم حفظ التوكن**\n\nدلوقتي دوس "ايدي الادمن"')
+        
+    elif waiting == 'set_admin':
+        if not text.isdigit():
+            await event.reply('❌ الايدي لازم ارقام بس\n\nجيب الايدي من @userinfobot')
+            del db['waiting_for'][str(uid)]
+            save_db()
+            return
+        if str(uid) not in db.get('pending_bots', {}):
+            db['pending_bots'][str(uid)] = {}
+        db['pending_bots'][str(uid)]['admin_id'] = text
+        del db['waiting_for'][str(uid)]
+        save_db()
+        await event.reply('✅ **تم حفظ ايدي الادمن**\n\nدوس "انشاء البوت" دلوقتي')
 
     if not is_subscribed(uid):
         btns = [
