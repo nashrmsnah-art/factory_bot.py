@@ -12,8 +12,8 @@ import random
 import re
 
 # ===== بيانات البوت =====
-API_ID = 33595004
-API_HASH = "cbd1066ed026997f2f4a7c4323b7bda7"
+API_ID = 31650696
+API_HASH = "2829d6502df68cd12fab33cabf2851d2"
 BOT_TOKEN = "{BOT_TOKEN}"
 ADMIN_ID = {ADMIN_ID}
 DEVELOPER_LINK = "{DEVELOPER_LINK}"
