@@ -1,4 +1,4 @@
-from telethon import TelegramClient, events, Button
+ifrom telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError, UserDeactivatedBanError, UserAlreadyParticipantError
 from telethon.tl.functions.channels import GetParticipantRequest, JoinChannelRequest
@@ -366,6 +366,90 @@ async def callback(event):
         return
 
     elif data == 'free_trial':
+    elif data == 'generate_bot':
+        pending = db.get('pending_bots', {}).get(str(uid), {})
+        if not pending.get('token') or not pending.get('admin_id'):
+            await event.answer('❌ لازم تدخل التوكن وايدي الادمن اول', alert=True)
+            return
+
+        await event.edit('⏳ **جاري فحص التوكن...**')
+        try:
+            token = pending['token'].strip()
+            
+            if not token or token == 'users' or len(token) < 40 or ':' not in token:
+                await event.reply(f'''❌ **التوكن غلط:** 
+`{token}`
+
+**شكله الصح:**
+`1234567890:ABCdEfGhIjKlMnOpQrStUvWxYz123456789`
+
+هاته من @BotFather''')
+                return
+
+            duration_key = pending.get('duration', '1m')
+            expiry_date = (datetime.now() + timedelta(days=DURATIONS[duration_key]['days'])).isoformat()
+
+            await event.edit('⏳ **جاري انشاء البوت...**')
+            
+            bot_data = {
+                'BOT_TOKEN': token,
+                'ADMIN_ID': pending['admin_id'],
+                'DEVELOPER_LINK': pending.get('dev_username', DEVELOPER_LINK),
+                'FORCE_SUB_CHANNELS': repr(pending.get('channels', [])),
+                'IS_PAID_BOT': pending.get('is_paid', False),
+                'EXPIRY_DATE': f'"{expiry_date}"',
+                'FACTORY_ADMIN_ID': ADMIN_ID
+            }
+            bot_code = generate_bot_file(bot_data)
+            filename = f'bot_{uid}_{random.randint(1000,9999)}.py'
+            with open(filename, 'w', encoding='utf-8') as f: f.write(bot_code)
+
+            test_client = TelegramClient(StringSession(), API_ID, API_HASH)
+            await test_client.start(bot_token=token)
+            me = await test_client.get_me()
+            await test_client.disconnect()
+
+            bot_info = {
+                'username': me.username,
+                'token': token,
+                'created': datetime.now().isoformat(),
+                'is_paid': pending.get('is_paid', False),
+                'expiry': expiry_date,
+                'duration': duration_key,
+                'owner_id': uid,
+                'disabled': False
+            }
+            
+            if 'bots' not in user: user['bots'] = []
+            user['bots'].append(bot_info)
+            if 'all_bots' not in db: db['all_bots'] = {}
+            db['all_bots'][me.username] = bot_info
+            user['bots_used'] = user.get('bots_used', 0) + 1
+            if str(uid) in db.get('pending_bots', {}): del db['pending_bots'][str(uid)]
+            save_db()
+
+            bot_type = '💰 مدفوع' if pending.get('is_paid', False) else '🆓 مجاني'
+            exp_date = datetime.fromisoformat(expiry_date).strftime('%Y-%m-%d')
+            await event.reply(f'''✅ **تم انشاء البوت بنجاح**
+
+🤖 @{me.username}
+💎 النوع: {bot_type}
+⏰ الصلاحية: {DURATIONS[duration_key]["name"]}
+📅 ينتهي: {exp_date}
+
+📁 **الملف جاهز للرفع على Railway**
+
+Variables: BOT_TOKEN = {token}''', file=filename)
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f'Bot creation error: {error_msg}')
+            if 'AccessTokenInvalidError' in error_msg or 'Unauthorized' in error_msg:
+                error_text = '❌ **التوكن غلط - طلع واحد جديد من @BotFather**'
+            else:
+                error_text = f'❌ **خطأ:** `{error_msg[:100]}`'
+            await event.reply(error_text)
+        return
         if user.get('used_trial'):
             await event.answer("❌ استخدمت التجربة المجانية قبل كده", alert=True)
             return
