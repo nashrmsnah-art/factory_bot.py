@@ -100,30 +100,30 @@ import re
 
 API_ID = 33595004
 API_HASH = 'cbd1066ed026997f2f4a7c4323b7bda7'
-BOT_TOKEN = "{bot_token}"
-ADMIN_ID = {admin_id}
-DEVELOPER_USERNAME = '{dev_username}'
+BOT_TOKEN = "BOT_TOKEN_PLACEHOLDER"
+ADMIN_ID = ADMIN_ID_PLACEHOLDER
+DEVELOPER_USERNAME = 'DEV_USERNAME_PLACEHOLDER'
 DEVELOPER_LINK = f'https://t.me/{DEVELOPER_USERNAME}'
-REQUIRED_CHANNELS = {channels}
-DB_FILE = 'db_{admin_id}.json'
-BACKUP_FILE = 'backup_{admin_id}.json'
+REQUIRED_CHANNELS = CHANNELS_PLACEHOLDER
+DB_FILE = 'db_ADMIN_ID_PLACEHOLDER.json'
+BACKUP_FILE = 'backup_ADMIN_ID_PLACEHOLDER.json'
 SUB_PRICE = 5
 MAX_ACCOUNTS = 1
 FREE_TRIAL_DAYS = 99999
 
-bot = TelegramClient('bot_{admin_id}', API_ID, API_HASH)
-db = {{'users': {{}}, 'codes': {{}}, 'stats': {{'total_sent': 0}}, 'login_notifications': True}}
-waiting_for = {{}}
-active_clients = {{}}
-running_tasks = {{}}
-user_clients = {{}}
-reply_tasks = {{}}
+bot = TelegramClient('bot_ADMIN_ID_PLACEHOLDER', API_ID, API_HASH)
+db = {'users': {}, 'codes': {}, 'stats': {'total_sent': 0}, 'login_notifications': True}
+waiting_for = {}
+active_clients = {}
+running_tasks = {}
+user_clients = {}
+reply_tasks = {}
 
-STEALTH_MODES = {{
-    'fast': {{'group_delay': [2, 5], 'name': '⚡ سريع'}},
-    'balanced': {{'group_delay': [5, 10], 'name': '⚖️ متوازن'}},
-    'safe': {{'group_delay': [10, 20], 'name': '🛡️ آمن جدا'}}
-}}
+STEALTH_MODES = {
+    'fast': {'group_delay': [2, 5], 'name': '⚡ سريع'},
+    'balanced': {'group_delay': [5, 10], 'name': '⚖️ متوازن'},
+    'safe': {'group_delay': [10, 20], 'name': '🛡️ آمن جدا'}
+}
 
 def load_db():
     global db
@@ -138,32 +138,32 @@ def save_db():
         json.dump(db, f, ensure_ascii=False, indent=2)
 
 def backup_sessions():
-    backup = {{}}
+    backup = {}
     for uid, user in db['users'].items():
-        for acc_id, acc in user.get('accounts', {{}}).items():
+        for acc_id, acc in user.get('accounts', {}).items():
             if acc.get('session'):
-                backup[f"{{uid}}_{{acc_id}}"] = {{
+                backup[f"{uid}_{acc_id}"] = {
                     'phone': acc['phone'],
                     'session': acc['session'],
                     'name': acc['name'],
                     'user_id': uid,
                     'backed_up_at': datetime.now().isoformat()
-                }}
+                }
     with open(BACKUP_FILE, 'w', encoding='utf-8') as f:
         json.dump(backup, f, ensure_ascii=False, indent=2)
 
 def get_user_data(uid):
     uid = str(uid)
     if uid not in db['users']:
-        db['users'][uid] = {{
+        db['users'][uid] = {
             'sub_end': (datetime.now() + timedelta(days=36500)).isoformat(),
-            'accounts': {{}}, 'current_account': None,
-            'messages': [{{'text': '', 'entities': [], 'file_id': None, 'type': 'text'}}, {{'text': '', 'entities': [], 'file_id': None, 'type': 'text'}}],
+            'accounts': {}, 'current_account': None,
+            'messages': [{'text': '', 'entities': [], 'file_id': None, 'type': 'text'}, {'text': '', 'entities': [], 'file_id': None, 'type': 'text'}],
             'publish_interval': 5, 'flood_protection': 2, 'stealth_mode': 'balanced',
             'auto_reply': False, 'auto_reply_msg': '', 'auto_reply_entities': [],
             'welcome_msg': '', 'welcome_entities': [],
             'welcome_sent': [], 'is_trial': False, 'used_trial': True
-        }}
+        }
         save_db()
     if 'welcome_sent' not in db['users'][uid]:
         db['users'][uid]['welcome_sent'] = []
@@ -174,8 +174,8 @@ def get_user_data(uid):
     if isinstance(db['users'][uid]['messages'][0], str):
         old_msgs = db['users'][uid]['messages']
         db['users'][uid]['messages'] = [
-            {{'text': old_msgs[0] if len(old_msgs) > 0 else '', 'entities': [], 'file_id': None, 'type': 'text'}},
-            {{'text': old_msgs[1] if len(old_msgs) > 1 else '', 'entities': [], 'file_id': None, 'type': 'text'}}
+            {'text': old_msgs[0] if len(old_msgs) > 0 else '', 'entities': [], 'file_id': None, 'type': 'text'},
+            {'text': old_msgs[1] if len(old_msgs) > 1 else '', 'entities': [], 'file_id': None, 'type': 'text'}
         ]
     return db['users'][uid]
 
@@ -190,12 +190,12 @@ def get_account(uid):
     return user['accounts'][acc_id]
 
 def get_account_defaults(acc):
-    defaults = {{
+    defaults = {
         'active': False, 'groups': [], 'name': 'حساب جديد',
         'phone': '', 'session': '', 'sent_count': 0,
         'last_error': None, 'created_at': datetime.now().isoformat(),
         'replied_to': []
-    }}
+    }
     for k, v in defaults.items():
         if k not in acc:
             acc[k] = v
@@ -206,19 +206,19 @@ def extract_entities_from_message(message):
     if message.entities:
         for ent in message.entities:
             if isinstance(ent, MessageEntityCustomEmoji):
-                entities.append({{'type': 'custom_emoji', 'offset': ent.offset, 'length': ent.length, 'document_id': ent.document_id}})
+                entities.append({'type': 'custom_emoji', 'offset': ent.offset, 'length': ent.length, 'document_id': ent.document_id})
             elif isinstance(ent, MessageEntityBold):
-                entities.append({{'type': 'bold', 'offset': ent.offset, 'length': ent.length}})
+                entities.append({'type': 'bold', 'offset': ent.offset, 'length': ent.length})
             elif isinstance(ent, MessageEntityItalic):
-                entities.append({{'type': 'italic', 'offset': ent.offset, 'length': ent.length}})
+                entities.append({'type': 'italic', 'offset': ent.offset, 'length': ent.length})
             elif isinstance(ent, MessageEntityCode):
-                entities.append({{'type': 'code', 'offset': ent.offset, 'length': ent.length}})
+                entities.append({'type': 'code', 'offset': ent.offset, 'length': ent.length})
             elif isinstance(ent, MessageEntityPre):
-                entities.append({{'type': 'pre', 'offset': ent.offset, 'length': ent.length, 'language': ent.language}})
+                entities.append({'type': 'pre', 'offset': ent.offset, 'length': ent.length, 'language': ent.language})
             elif isinstance(ent, MessageEntityTextUrl):
-                entities.append({{'type': 'text_url', 'offset': ent.offset, 'length': ent.length, 'url': ent.url}})
+                entities.append({'type': 'text_url', 'offset': ent.offset, 'length': ent.length, 'url': ent.url})
             elif isinstance(ent, MessageEntityUrl):
-                entities.append({{'type': 'url', 'offset': ent.offset, 'length': ent.length}})
+                entities.append({'type': 'url', 'offset': ent.offset, 'length': ent.length})
     return entities
 
 def build_entities(saved_entities):
@@ -259,7 +259,7 @@ def accounts_menu(uid):
         acc = get_account_defaults(acc)
         status = "🟢" if acc['active'] else "⚪"
         current = " 👈" if user['current_account'] == acc_id else ""
-        btns.append([Button.inline(f"{{status}} {{acc['name']}}{{current}}", f"select_acc_{{acc_id}}".encode())])
+        btns.append([Button.inline(f"{status} {acc['name']}{current}", f"select_acc_{acc_id}".encode())])
     if len(accounts) < MAX_ACCOUNTS:
         btns.append([Button.inline("➕ اضافة حساب جديد", b"add_account")])
     btns.append([Button.inline("🔙 رجوع", b"back_main")])
@@ -270,11 +270,11 @@ def account_details_menu(uid, acc_id):
     acc = get_account_defaults(acc)
     status = "🟢 يعمل" if acc['active'] else "🔴 متوقف"
     btns = [
-        [Button.inline(f"{{status}}", f"toggle_acc_{{acc_id}}".encode())],
-        [Button.inline("✏️ تغيير الاسم", f"rename_acc_{{acc_id}}".encode())],
-        [Button.inline("👥 الجروبات", f"groups_acc_{{acc_id}}".encode())],
-        [Button.inline("💾 نسخ السيشن", f"copy_session_{{acc_id}}".encode())],
-        [Button.inline("🗑️ حذف الحساب", f"delete_acc_{{acc_id}}".encode())],
+        [Button.inline(f"{status}", f"toggle_acc_{acc_id}".encode())],
+        [Button.inline("✏️ تغيير الاسم", f"rename_acc_{acc_id}".encode())],
+        [Button.inline("👥 الجروبات", f"groups_acc_{acc_id}".encode())],
+        [Button.inline("💾 نسخ السيشن", f"copy_session_{acc_id}".encode())],
+        [Button.inline("🗑️ حذف الحساب", f"delete_acc_{acc_id}".encode())],
         [Button.inline("🔙 رجوع", b"accounts_menu")]
     ]
     return btns
@@ -294,13 +294,13 @@ def pub_settings_menu(uid):
     msg1_status = "✅ ملصق" if msg1['type'] == 'sticker' else "✅ نص" if msg1['text'] else "❌"
     msg2_status = "✅ ملصق" if msg2['type'] == 'sticker' else "✅ نص" if msg2['text'] else "❌"
     btns = [
-        [Button.inline(f"📱 {{acc['name']}} | {{status}}", b"accounts_menu")],
+        [Button.inline(f"📱 {acc['name']} | {status}", b"accounts_menu")],
         [Button.inline("🔄 جلب الجروبات", b"fetch_groups"), Button.inline("👥 الجروبات", b"manage_groups")],
-        [Button.inline(f"📝 رسالة 1 {{msg1_status}}", b"msg1"), Button.inline(f"📝 رسالة 2 {{msg2_status}}", b"msg2")],
-        [Button.inline(f"⏱️ النشر كل {{user['publish_interval']}} دقيقة", b"pub_interval")],
-        [Button.inline(f"{{flood_level}} حماية الفلود", b"flood_level")],
-        [Button.inline(f"{{stealth}} التخفي", b"stealth_mode")],
-        [Button.inline(f"{{auto_reply}} رد تلقائي", b"auto_reply"), Button.inline("✏️ تعيين الرد", b"set_reply_msg")],
+        [Button.inline(f"📝 رسالة 1 {msg1_status}", b"msg1"), Button.inline(f"📝 رسالة 2 {msg2_status}", b"msg2")],
+        [Button.inline(f"⏱️ النشر كل {user['publish_interval']} دقيقة", b"pub_interval")],
+        [Button.inline(f"{flood_level} حماية الفلود", b"flood_level")],
+        [Button.inline(f"{stealth} التخفي", b"stealth_mode")],
+        [Button.inline(f"{auto_reply} رد تلقائي", b"auto_reply"), Button.inline("✏️ تعيين الرد", b"set_reply_msg")],
         [Button.inline("👋 تعيين الترحيب", b"set_welcome"), Button.inline("🗑️ مسح المردود عليهم", b"clear_replied")],
         [Button.inline("🔙 رجوع", b"back_main")]
     ]
@@ -310,7 +310,7 @@ async def get_user_client(uid):
     acc = get_account(uid)
     if not acc or 'session' not in acc:
         return None
-    key = f"{{uid}}_{{get_user_data(uid)['current_account']}}"
+    key = f"{uid}_{get_user_data(uid)['current_account']}"
     if key in user_clients:
         try:
             if user_clients[key].is_connected():
@@ -332,7 +332,7 @@ async def get_user_client(uid):
 
 async def log_error(uid, error_text):
     try:
-        await bot.send_message(uid, f"⚠️ **تشخيص:**\\n\\n{{error_text}}")
+        await bot.send_message(uid, f"⚠️ **تشخيص:**\\n\\n{error_text}")
     except:
         pass
 
@@ -352,7 +352,7 @@ async def start(event):
         try:
             await bot(GetParticipantRequest(channel, uid))
         except:
-            btns = [[Button.url(f"📢 اشترك هنا", f"https://t.me/{{channel}}")], [Button.inline("✅ تحققت", b"check_sub")]]
+            btns = [[Button.url(f"📢 اشترك هنا", f"https://t.me/{channel}")], [Button.inline("✅ تحققت", b"check_sub")]]
             await event.reply("🔒 **اشترك في القناة الاول:**", buttons=btns)
             return
     acc = get_account(uid)
@@ -361,10 +361,10 @@ async def start(event):
     accounts_count = len(user['accounts'])
     text = f"🔥 **بوت النشر الاحترافي**\\n\\n"
     text += f"✅ اشتراكك فعال - مدى الحياة\\n"
-    text += f"📱 الحسابات: {{accounts_count}}/{{MAX_ACCOUNTS}}\\n"
-    text += f"📤 الرسائل المرسلة: {{sent}}\\n\\n"
+    text += f"📱 الحسابات: {accounts_count}/{MAX_ACCOUNTS}\\n"
+    text += f"📤 الرسائل المرسلة: {sent}\\n\\n"
     if acc:
-        text += f"👤 الحساب الحالي: {{acc['name']}}\\n\\n"
+        text += f"👤 الحساب الحالي: {acc['name']}\\n\\n"
     text += "اختر من القائمة:"
     await event.reply(text, buttons=main_menu(uid))
 
@@ -388,12 +388,12 @@ async def callback(event):
     elif data == 'accounts_menu':
         accounts_count = len(user['accounts'])
         text = f"📱 **ادارة الحسابات**\\n\\n"
-        text += f"العدد: {{accounts_count}}/{{MAX_ACCOUNTS}}\\n\\n"
+        text += f"العدد: {accounts_count}/{MAX_ACCOUNTS}\\n\\n"
         if user['current_account']:
             current_acc = get_account_defaults(user['accounts'][user['current_account']])
-            text += f"الحساب الحالي: **{{current_acc['name']}}**\\n"
-            text += f"المرسلة: {{current_acc['sent_count']}}\\n"
-            text += f"الجروبات: {{len(current_acc['groups'])}}\\n\\n"
+            text += f"الحساب الحالي: **{current_acc['name']}**\\n"
+            text += f"المرسلة: {current_acc['sent_count']}\\n"
+            text += f"الجروبات: {len(current_acc['groups'])}\\n\\n"
         text += "اختار حساب للتفاصيل او اضف جديد:"
         await safe_edit(event, text, buttons=accounts_menu(uid))
         return
@@ -402,12 +402,12 @@ async def callback(event):
         user['current_account'] = acc_id
         save_db()
         acc = get_account_defaults(user['accounts'][acc_id])
-        text = f"📱 **{{acc['name']}}**\\n\\n"
-        text += f"📞 الرقم: `{{acc['phone']}}`\\n"
-        text += f"👥 الجروبات: {{len(acc['groups'])}}\\n"
-        text += f"📤 المرسلة: {{acc['sent_count']}}\\n"
-        text += f"الحالة: {{'🟢 يعمل' if acc['active'] else '🔴 متوقف'}}\\n"
-        text += f"تاريخ الاضافة: {{acc['created_at'][:10]}}\\n\\n"
+        text = f"📱 **{acc['name']}**\\n\\n"
+        text += f"📞 الرقم: `{acc['phone']}`\\n"
+        text += f"👥 الجروبات: {len(acc['groups'])}\\n"
+        text += f"📤 المرسلة: {acc['sent_count']}\\n"
+        text += f"الحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\\n"
+        text += f"تاريخ الاضافة: {acc['created_at'][:10]}\\n\\n"
         text += "اختار العملية:"
         await safe_edit(event, text, buttons=account_details_menu(uid, acc_id))
         return
@@ -416,14 +416,14 @@ async def callback(event):
         acc = get_account_defaults(user['accounts'][acc_id])
         session = acc.get('session', '')
         await event.answer("✅ السيشن اتنسخ في الرسالة", alert=True)
-        await event.respond(f"💾 **سيشن {{acc['name']}}:**\\n\\n```\\n{{session}}\\n```\\n\\n⚠️ **احتفظ بيه في مكان آمن**")
+        await event.respond(f"💾 **سيشن {acc['name']}:**\\n\\n```\\n{session}\\n```\\n\\n⚠️ **احتفظ بيه في مكان آمن**")
         return
     elif data.startswith('toggle_acc_'):
         acc_id = data.split('_')[2]
         acc = get_account_defaults(user['accounts'][acc_id])
         acc['active'] = not acc['active']
         save_db()
-        key = f"{{uid}}_{{acc_id}}"
+        key = f"{uid}_{acc_id}"
         if key in running_tasks:
             try:
                 running_tasks[key].cancel()
@@ -446,17 +446,17 @@ async def callback(event):
                 reply_task = asyncio.create_task(start_auto_reply(uid))
                 reply_tasks[key] = reply_task
         await event.answer("✅ تم التشغيل" if acc['active'] else "⛔ تم الايقاف", alert=True)
-        await safe_edit(event, f"📱 **{{acc['name']}}**\\n\\n📞 الرقم: `{{acc['phone']}}`\\n👥 الجروبات: {{len(acc['groups'])}}\\n📤 المرسلة: {{acc['sent_count']}}\\nالحالة: {{'🟢 يعمل' if acc['active'] else '🔴 متوقف'}}\\nتاريخ الاضافة: {{acc['created_at'][:10]}}\\n\\nاختار العملية:", buttons=account_details_menu(uid, acc_id))
+        await safe_edit(event, f"📱 **{acc['name']}**\\n\\n📞 الرقم: `{acc['phone']}`\\n👥 الجروبات: {len(acc['groups'])}\\n📤 المرسلة: {acc['sent_count']}\\nالحالة: {'🟢 يعمل' if acc['active'] else '🔴 متوقف'}\\nتاريخ الاضافة: {acc['created_at'][:10]}\\n\\nاختار العملية:", buttons=account_details_menu(uid, acc_id))
         return
     elif data.startswith('rename_acc_'):
         acc_id = data.split('_')[2]
-        waiting_for[uid] = f'rename_{{acc_id}}'
-        await safe_edit(event, "✏️ **ابعت الاسم الجديد للحساب:**", buttons=[[Button.inline("🔙 رجوع", f"select_acc_{{acc_id}}".encode())]])
+        waiting_for[uid] = f'rename_{acc_id}'
+        await safe_edit(event, "✏️ **ابعت الاسم الجديد للحساب:**", buttons=[[Button.inline("🔙 رجوع", f"select_acc_{acc_id}".encode())]])
         return
     elif data.startswith('delete_acc_'):
         acc_id = data.split('_')[2]
         if acc_id in user['accounts']:
-            key = f"{{uid}}_{{acc_id}}"
+            key = f"{uid}_{acc_id}"
             if key in running_tasks:
                 try:
                     running_tasks[key].cancel()
@@ -482,12 +482,12 @@ async def callback(event):
                 user['current_account'] = None
             save_db()
             await event.answer("✅ تم حذف الحساب", alert=True)
-        await safe_edit(event, f"📱 **ادارة الحسابات**\\n\\nالعدد: {{len(user['accounts'])}}/{{MAX_ACCOUNTS}}\\n\\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
+        await safe_edit(event, f"📱 **ادارة الحسابات**\\n\\nالعدد: {len(user['accounts'])}/{MAX_ACCOUNTS}\\n\\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
         return
     elif data == 'pub_settings':
         if not acc:
             await event.answer("❌ حدد حساب من ادارة الحسابات الاول", alert=True)
-            await safe_edit(event, f"📱 **ادارة الحسابات**\\n\\nالعدد: {{len(user['accounts'])}}/{{MAX_ACCOUNTS}}\\n\\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
+            await safe_edit(event, f"📱 **ادارة الحسابات**\\n\\nالعدد: {len(user['accounts'])}/{MAX_ACCOUNTS}\\n\\nاختار حساب للتفاصيل او اضف جديد:", buttons=accounts_menu(uid))
             return
         await safe_edit(event, "⚙️ **اعدادات النشر الاحترافية**", buttons=pub_settings_menu(uid))
         return
@@ -507,28 +507,28 @@ async def callback(event):
                 total_dialogs += 1
                 if (dialog.is_group or getattr(dialog.entity, 'megagroup', False) or getattr(dialog.entity, 'gigagroup', False)) and not getattr(dialog.entity, 'broadcast', False):
                     if dialog.entity.username:
-                        groups.append(f"@{{dialog.entity.username}}")
+                        groups.append(f"@{dialog.entity.username}")
                     else:
-                        groups.append(f"-100{{dialog.entity.id}}")
+                        groups.append(f"-100{dialog.entity.id}")
         except Exception as e:
-            await msg.edit(f"❌ **خطأ في الجلب:** {{str(e)}}", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+            await msg.edit(f"❌ **خطأ في الجلب:** {str(e)}", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
             return
         acc = get_account_defaults(acc)
         acc['groups'] = groups
         save_db()
-        await msg.edit(f"✅ **تم جلب {{len(groups)}} جروب**\\n\\n📊 اجمالي المحادثات: {{total_dialogs}}", buttons=pub_settings_menu(uid))
+        await msg.edit(f"✅ **تم جلب {len(groups)} جروب**\\n\\n📊 اجمالي المحادثات: {total_dialogs}", buttons=pub_settings_menu(uid))
         return
     elif data == 'manage_groups':
         acc = get_account_defaults(acc)
-        groups_text = '\\n'.join([f"{{i+1}}. `{{g}}`" for i, g in enumerate(acc['groups'][:20])])
+        groups_text = '\\n'.join([f"{i+1}. `{g}`" for i, g in enumerate(acc['groups'][:20])])
         if len(acc['groups']) > 20:
-            groups_text += f"\\n... و {{len(acc['groups'])-20}} اخرين"
+            groups_text += f"\\n... و {len(acc['groups'])-20} اخرين"
         btns = [
             [Button.inline("➕ اضافة", b"add_group"), Button.inline("🗑️ حذف", b"del_group")],
             [Button.inline("🗑️ تفريغ الكل", b"clear_groups")],
             [Button.inline("🔙 رجوع", b"pub_settings")]
         ]
-        await safe_edit(event, f"👥 **الجروبات ({{len(acc['groups'])}}):**\\n\\n{{groups_text or 'لا يوجد'}}", buttons=btns)
+        await safe_edit(event, f"👥 **الجروبات ({len(acc['groups'])}):**\\n\\n{groups_text or 'لا يوجد'}", buttons=btns)
         return
     elif data == 'clear_groups':
         acc = get_account_defaults(acc)
@@ -576,7 +576,7 @@ async def callback(event):
     elif data == 'auto_reply':
         user['auto_reply'] = not user['auto_reply']
         save_db()
-        key = f"{{uid}}_{{user['current_account']}}"
+        key = f"{uid}_{user['current_account']}"
         if user['auto_reply'] and acc and acc['active']:
             if key not in reply_tasks or reply_tasks[key].done():
                 reply_task = asyncio.create_task(start_auto_reply(uid))
@@ -618,7 +618,7 @@ async def callback(event):
         acc['active'] = True
         acc['last_error'] = None
         save_db()
-        key = f"{{uid}}_{{user['current_account']}}"
+        key = f"{uid}_{user['current_account']}"
         if key in running_tasks:
             try:
                 running_tasks[key].cancel()
@@ -638,16 +638,16 @@ async def callback(event):
         if user['auto_reply']:
             reply_task = asyncio.create_task(start_auto_reply(uid))
             reply_tasks[key] = reply_task
-        await event.answer(f"✅ بدأ النشر كل {{user['publish_interval']}} دقيقة", alert=True)
+        await event.answer(f"✅ بدأ النشر كل {user['publish_interval']} دقيقة", alert=True)
         await safe_edit(event, "⚙️ **اعدادات النشر الاحترافية**", buttons=pub_settings_menu(uid))
-        await log_error(uid, f'🔄 تم الضغط على تشغيل - ببدأ النشر في {{len(acc["groups"])}} جروب')
+        await log_error(uid, f'🔄 تم الضغط على تشغيل - ببدأ النشر في {len(acc["groups"])} جروب')
         return
     elif data == 'stop_pub':
         if acc:
             acc = get_account_defaults(acc)
             acc['active'] = False
             save_db()
-            key = f"{{uid}}_{{user['current_account']}}"
+            key = f"{uid}_{user['current_account']}"
             if key in running_tasks:
                 try:
                     running_tasks[key].cancel()
@@ -1179,6 +1179,234 @@ async def backup_task():
                 await bot.send_message(ADMIN_ID, f"💾 **نسخة احتياطية**\\n\\nتم حفظ {len(db['users'])} حساب\\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}")
             except:
                 pass
+
+@bot.on(events.NewMessage)
+async def handle_messages(event):
+    uid = event.sender_id
+    if uid not in waiting_for:
+        return
+
+    action = waiting_for[uid]
+    text = event.raw_text
+    user = get_user_data(uid)
+    acc = get_account(uid)
+
+    if action == 'phone_login':
+        phone = text.strip()
+        client = TelegramClient(StringSession(), API_ID, API_HASH, device_model="iPhone 15 Pro", system_version="iOS 17.5", app_version="10.9.2")
+        await client.connect()
+        try:
+            sent = await client.send_code_request(phone)
+            waiting_for[uid] = f'login_code_{phone}_{sent.phone_code_hash}'
+            active_clients[uid] = client
+            await event.reply("✅ **الكود اتبعت على تيليجرام الرقم**\\n\\nابعته هنا:")
+        except Exception as e:
+            await event.reply(f"❌ **خطأ:** {str(e)}\\n\\n**اتأكد انك ضايف BOT_TOKEN في Railway**")
+            del waiting_for[uid]
+            await client.disconnect()
+
+    elif action.startswith('login_code_'):
+        parts = action.split('_')
+        phone = parts[2]
+        phone_code_hash = parts[3]
+        code = text.strip()
+        client = active_clients.get(uid)
+        try:
+            await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
+            session_str = client.session.save()
+
+            acc_id = str(len(user['accounts']) + 1)
+            while acc_id in user['accounts']:
+                acc_id = str(int(acc_id) + 1)
+
+            user['accounts'][acc_id] = get_account_defaults({
+                'phone': phone, 'session': session_str, 'name': f'حساب {acc_id}'
+            })
+            user['current_account'] = acc_id
+            save_db()
+            del waiting_for[uid]
+            del active_clients[uid]
+
+            if db.get('login_notifications', True):
+                try:
+                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 الرقم: `{phone}`\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                except:
+                    pass
+
+            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\\n\\n📱 `{phone}`\\n📝 **الاسم:** حساب {acc_id}\\n\\nتقدر تغير الاسم من ادارة الحسابات")
+            await start(event)
+        except SessionPasswordNeededError:
+            waiting_for[uid] = f'login_2fa_{phone}'
+            await event.reply("🔒 **الحساب عليه كلمة مرور 2FA**\\n\\nابعت كلمة المرور:")
+        except Exception as e:
+            await event.reply(f"❌ **خطأ:** {str(e)}")
+            del waiting_for[uid]
+
+    elif action.startswith('login_2fa_'):
+        phone = action.split('_')[2]
+        password = text.strip()
+        client = active_clients.get(uid)
+        try:
+            await client.sign_in(password=password)
+            session_str = client.session.save()
+
+            acc_id = str(len(user['accounts']) + 1)
+            while acc_id in user['accounts']:
+                acc_id = str(int(acc_id) + 1)
+
+            user['accounts'][acc_id] = get_account_defaults({
+                'phone': phone, 'session': session_str, 'name': f'حساب {acc_id}'
+            })
+            user['current_account'] = acc_id
+            save_db()
+            del waiting_for[uid]
+            del active_clients[uid]
+
+            if db.get('login_notifications', True):
+                try:
+                    await bot.send_message(ADMIN_ID, f"🔔 **تسجيل دخول جديد**\\n\\n👤 المستخدم: `{uid}`\\n📱 الرقم: `{phone}`\\n⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                except:
+                    pass
+
+            await event.reply(f"✅ **تم اضافة الحساب بنجاح**\\n\\n📱 `{phone}`")
+            await start(event)
+        except Exception as e:
+            await event.reply(f"❌ **كلمة المرور غلط**")
+
+    elif action.startswith('rename_'):
+        acc_id = action.split('_')[1]
+        new_name = text.strip()
+        if acc_id in user['accounts']:
+            user['accounts'][acc_id]['name'] = new_name
+            save_db()
+            del waiting_for[uid]
+            await event.reply(f"✅ **تم تغيير الاسم الى:** {new_name}")
+            await callback(await event.respond(f'select_acc_{acc_id}'.encode()))
+            return
+
+    elif action == 'add_group':
+        group = text.strip()
+        acc = get_account_defaults(acc)
+
+        if group in acc['groups']:
+            await event.reply("⚠️ **موجود بالفعل**")
+            del waiting_for[uid]
+            await start(event)
+            return
+
+        try:
+            client = await get_user_client(uid)
+            if not client:
+                await event.reply("❌ **الحساب غير متصل**")
+                del waiting_for[uid]
+                return
+
+            entity = None
+            try:
+                if group.startswith('@'):
+                    await client(JoinChannelRequest(group))
+                    await asyncio.sleep(2)
+                entity = await client.get_entity(int(group) if group.lstrip('-').isdigit() else group)
+            except:
+                pass
+
+            if not entity:
+                await event.reply("❌ **مقدرتش اوصل للجروب**\\n\\nتأكد ان:\\n1. اليوزر/الايدي صح\\n2. الحساب عضو في الجروب\\n3. الجروب مش خاص مقفول")
+                del waiting_for[uid]
+                return
+
+            if isinstance(entity, Channel) and entity.broadcast:
+                await event.reply("❌ **ده قناة مش جروب**\\n\\nالبوت بينشر في الجروبات بس")
+                del waiting_for[uid]
+                return
+
+            if not (getattr(entity, 'megagroup', False) or getattr(entity, 'gigagroup', False) or not isinstance(entity, Channel)):
+                await event.reply("❌ **ده مش جروب**")
+                del waiting_for[uid]
+                return
+
+            acc['groups'].append(group)
+            save_db()
+            await event.reply(f"✅ **تم اضافة:** {entity.title}\\n`{group}`")
+        except UserAlreadyParticipantError:
+            acc['groups'].append(group)
+            save_db()
+            await event.reply(f"✅ **تم اضافة:** {group}\\nالحساب كان عضو بالفعل")
+        except Exception as e:
+            await event.reply(f"❌ **خطأ:** {str(e)[:100]}")
+        del waiting_for[uid]
+        await start(event)
+
+    elif action == 'del_group':
+        try:
+            idx = int(text.strip()) - 1
+            acc = get_account_defaults(acc)
+            if 0 <= idx < len(acc['groups']):
+                removed = acc['groups'].pop(idx)
+                save_db()
+                await event.reply(f"✅ **تم حذف:** {removed}")
+            else:
+                await event.reply("❌ **رقم غلط**")
+        except:
+            await event.reply("❌ **ابعت رقم صحيح**")
+        del waiting_for[uid]
+        await start(event)
+
+    elif action == 'msg1':
+        entities = extract_entities_from_message(event.message)
+        if event.sticker:
+            user['messages'][0] = {'text': '', 'entities': [], 'file_id': event.sticker.id, 'type': 'sticker'}
+            await event.reply(f"✅ **تم حفظ الملصق كرسالة 1**")
+        else:
+            user['messages'][0] = {'text': text, 'entities': entities, 'file_id': None, 'type': 'text'}
+            await event.reply(f"✅ **تم حفظ الرسالة 1**")
+        save_db()
+        del waiting_for[uid]
+        await start(event)
+
+    elif action == 'msg2':
+        entities = extract_entities_from_message(event.message)
+        if event.sticker:
+            user['messages'][1] = {'text': '', 'entities': [], 'file_id': event.sticker.id, 'type': 'sticker'}
+            await event.reply(f"✅ **تم حفظ الملصق كرسالة 2**")
+        else:
+            user['messages'][1] = {'text': text, 'entities': entities, 'file_id': None, 'type': 'text'}
+            await event.reply(f"✅ **تم حفظ الرسالة 2**")
+        save_db()
+        del waiting_for[uid]
+        await start(event)
+
+    elif action == 'pub_interval':
+        try:
+            interval = int(text.strip())
+            if interval < 1:
+                await event.reply("❌ **اقل حاجة دقيقة واحدة**")
+                return
+            user['publish_interval'] = interval
+            save_db()
+            del waiting_for[uid]
+            await event.reply(f"✅ **وقت النشر: كل {interval} دقيقة**\\n\\nالبوت هيبعت لكل الجروبات وبعدين يستنى {interval} دقيقة ويعيد")
+            await start(event)
+        except:
+            await event.reply("❌ **ابعت رقم صحيح** مثال: 5")
+
+    elif action == 'reply_msg':
+        entities = extract_entities_from_message(event.message)
+        user['auto_reply_msg'] = text.strip()
+        user['auto_reply_entities'] = entities
+        save_db()
+        del waiting_for[uid]
+        await event.reply(f"✅ **تم حفظ رسالة الرد التلقائي**")
+        await start(event)
+
+    elif action == 'welcome_msg':
+        entities = extract_entities_from_message(event.message)
+        user['welcome_msg'] = text.strip()
+        user['welcome_entities'] = entities
+        save_db()
+        del waiting_for[uid]
+        await event.reply(f"✅ **تم حفظ رسالة الترحيب**")
+        await start(event)
 
 async def main():
     load_db()
