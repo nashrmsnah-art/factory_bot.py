@@ -3,11 +3,11 @@ from datetime import datetime, timedelta
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 
-API_ID = 22043994
-API_HASH = "c13b5e1a2e8f0f6a3c6e3a1d8b5a9b0c"
+API_ID = 31650696
+API_HASH = "2829d6502df68cd12fab33cabf2851d2"
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = 7832394974
-DEVELOPER_LINK = "https://t.me/VIP1ST1"
+ADMIN_ID = 154919127
+DEVELOPER_LINK = "https://t.me/Devazf"
 
 bot = TelegramClient('factory', API_ID, API_HASH)
 db_file = "factory_db.json"
