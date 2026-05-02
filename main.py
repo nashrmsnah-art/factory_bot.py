@@ -652,7 +652,7 @@ async def setup_bot():
                 if min_delay >= max_delay: raise ValueError
                 if min_delay < 3: raise ValueError("اقل حاجة 3 ثواني")
 
-                   DB["wait_min"] = min_delay
+                DB["wait_min"] = min_delay
                 DB["wait_max"] = max_delay
                 save_db()
                 await event.reply(f"✅ تم التعيين\n\nالحد الادنى: {min_delay}ث\nالحد الاقصى: {max_delay}ث", buttons=[[Button.inline("🔙", b"back")]])
