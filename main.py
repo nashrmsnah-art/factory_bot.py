@@ -8,7 +8,13 @@ API_ID = 31650696
 API_HASH = '2829d6502df68cd12fab33cabf2851d2'
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEV_ID = 154919127
-DEVICE_MODEL = "iPhone 17"
+
+# ========== اعدادات iOS ==========
+DEVICE_MODEL = "iPhone 16 Pro Max"
+SYSTEM_VERSION = "iOS 18.2"
+APP_VERSION = "11.4.1"
+LANG_CODE = "ar"
+SYSTEM_LANG_CODE = "ar-AE"
 
 DB_FILE = "azef_one.json"
 USERS_FILE = "users.json"
@@ -24,7 +30,7 @@ def load_db():
         "replies": ["موجود ✨", "اؤمرني 🌟", "معاك 💎"],
         "wait_min": 5,
         "wait_max": 10,
-        "stealth_mode": False,
+        "stealth_mode": True,
         "temp_post": None,
         "scheduled_time": None
     }
@@ -78,27 +84,37 @@ async def register_userbot_handlers():
     @userbot.on(events.ChatAction)
     async def welcome(event):
         if event.chat_id in DB["groups"] and event.user_joined:
+            await userbot(UpdateStatusRequest(offline=True))
             text = DB["welcome"].format(name=event.user.first_name, username=event.user.username or "بدون")
-            await event.reply(text, silent=DB["stealth_mode"])
+            await event.reply(text, silent=True)
 
     @userbot.on(events.NewMessage)
     async def mention_reply(event):
         if event.chat_id in DB["groups"] and event.mentioned:
+            await userbot(UpdateStatusRequest(offline=True))
             reply = random.choice(DB["replies"])
             txt, ents = prem(reply, "sparkles")
-            await event.reply(txt, formatting_entities=ents, silent=DB["stealth_mode"])
+            await event.reply(txt, formatting_entities=ents, silent=True)
 
 async def start_userbot():
     global userbot
     if DB["phone"]:
         try:
-            userbot = TelegramClient(f'session_{DB["phone"]}', API_ID, API_HASH, device_model=DEVICE_MODEL)
+            userbot = TelegramClient(
+                f'ios_{DB["phone"]}',
+                API_ID,
+                API_HASH,
+                device_model=DEVICE_MODEL,
+                system_version=SYSTEM_VERSION,
+                app_version=APP_VERSION,
+                lang_code=LANG_CODE,
+                system_lang_code=SYSTEM_LANG_CODE
+            )
             await userbot.connect()
             if await userbot.is_user_authorized():
-                if DB["stealth_mode"]:
-                    await userbot(UpdateStatusRequest(offline=True))
+                await userbot(UpdateStatusRequest(offline=True))
                 await register_userbot_handlers()
-                print(f"✅ {DEVICE_MODEL} شغال")
+                print(f"✅ {DEVICE_MODEL} | iOS {SYSTEM_VERSION} | مخفي 👻")
                 return True
         except Exception as e:
             print(f"❌ خطأ في اليوزربوت: {e}")
@@ -112,17 +128,17 @@ async def setup_bot():
     @bot.on(events.NewMessage(pattern='/admin'))
     async def admin_panel(event):
         if not is_admin(event.sender_id): return
-        
+
         total_users = len(USERS["users"])
         active_codes = len([c for c in USERS["codes"].values() if not c["used"]])
-        
+
         btns = [
             [Button.inline("➕ توليد كود جديد", b"gen_code")],
             [Button.inline("👥 المستخدمين", b"list_users"), Button.inline("🔑 الاكواد", b"list_codes")],
             [Button.inline("🚫 حظر مستخدم", b"ban_user"), Button.inline("✅ فك حظر", b"unban_user")],
             [Button.inline("📊 احصائيات", b"stats")]
         ]
-        txt, ents = prem(f"👑 **لوحة الادمن**\n\nالمستخدمين: {total_users}\nاكواد متاحة: {active_codes}\nالجروبات: {len(DB['groups'])}", "diamond")
+        txt, ents = prem(f"👑 **لوحة الادمن - iOS**\n\n📱 الجهاز: {DEVICE_MODEL}\n🔢 النظام: {SYSTEM_VERSION}\n\nالمستخدمين: {total_users}\nاكواد متاحة: {active_codes}\nالجروبات: {len(DB['groups'])}", "diamond")
         await event.reply(txt, buttons=btns, formatting_entities=ents)
 
     @bot.on(events.CallbackQuery(pattern=b"gen_code"))
@@ -167,7 +183,7 @@ async def setup_bot():
         total = len(USERS["users"])
         active = len([u for u in USERS["users"].values() if not u.get("banned") and datetime.datetime.strptime(u["expire_date"], "%Y-%m-%d") > datetime.datetime.now()])
         banned = len([u for u in USERS["users"].values() if u.get("banned")])
-        txt = f"📊 **احصائيات**\n\nاجمالي المستخدمين: {total}\nمفعلين: {active}\nمحظورين: {banned}\nالجروبات: {len(DB['groups'])}"
+        txt = f"📊 **احصائيات iOS**\n\n📱 الجهاز: {DEVICE_MODEL}\n🔢 النظام: {SYSTEM_VERSION}\n📲 التطبيق: {APP_VERSION}\n\nاجمالي المستخدمين: {total}\nمفعلين: {active}\nمحظورين: {banned}\nالجروبات: {len(DB['groups'])}"
         await event.edit(txt, buttons=[[Button.inline("🔙", b"admin_back")]])
 
     @bot.on(events.CallbackQuery(data=b"admin_back"))
@@ -178,17 +194,17 @@ async def setup_bot():
     @bot.on(events.NewMessage(pattern='/start'))
     async def start_panel(event):
         uid = str(event.sender_id)
-        
+
         if not check_sub(event.sender_id):
             btns = [[Button.inline("🔑 تفعيل كود", b"activate_code")]]
-            await event.reply("⚠️ **البوت مدفوع**\n\nلازم كود تفعيل عشان تستخدم البوت\n\nتواصل مع الادمن: @Devazf", buttons=btns)
+            await event.reply("⚠️ **البوت مدفوع - iOS Edition**\n\nلازم كود تفعيل عشان تستخدم البوت\n\nتواصل مع الادمن: @Devazf", buttons=btns)
             return
 
         phone_status = f"✅ {DB['phone']}" if DB["phone"] else "❌ مش متضاف"
         wait_status = f"{DB['wait_min']}-{DB['wait_max']}ث"
         stealth_status = "👻 مفعل" if DB["stealth_mode"] else "👁️ معطل"
         schedule_status = DB["scheduled_time"] or "فوري"
-        
+
         if not is_admin(event.sender_id):
             expire = USERS["users"][uid]["expire_date"]
             sub_info = f"\nاشتراكك ينتهي: {expire}"
@@ -203,7 +219,7 @@ async def setup_bot():
             [Button.inline(f"👻 تخفي: {stealth_status}", b"toggle_stealth"), Button.inline("👋 الترحيب", b"set_welcome")],
             [Button.inline("💬 الردود", b"set_replies"), Button.inline("🎨 ايموجي", b"emoji")]
         ]
-        txt, ents = prem(f"🤖 Azef Sender V24 💎{sub_info}\n\nالجلسة: {DEVICE_MODEL}\nالجروبات: {len(DB['groups'])}\nالانتظار: {wait_status}\nالنشر: {schedule_status}\nالتخفي: {stealth_status}", "diamond")
+        txt, ents = prem(f"🤖 Azef iOS V25 💎{sub_info}\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}\n📲 Telegram {APP_VERSION}\n\nالجروبات: {len(DB['groups'])}\nالانتظار: {wait_status}\nالنشر: {schedule_status}\nالتخفي: {stealth_status}", "diamond")
         await event.reply(txt, buttons=btns, formatting_entities=ents)
 
     @bot.on(events.CallbackQuery(data=b"activate_code"))
@@ -313,7 +329,7 @@ async def setup_bot():
         if not check_sub(event.sender_id): return
         if DB["phone"]:
             btns = [[Button.inline("🔄 تغيير الرقم", b"change_phone")], [Button.inline("🗑️ حذف الرقم", b"del_phone")], [Button.inline("🔙", b"back")]]
-            await event.edit(f"📱 الرقم الحالي:\n`{DB['phone']}`\n\nالجلسة: {DEVICE_MODEL}", buttons=btns)
+            await event.edit(f"📱 الرقم الحالي:\n`{DB['phone']}`\n\nالجهاز: {DEVICE_MODEL}\nالنظام: {SYSTEM_VERSION}", buttons=btns)
         else:
             await event.edit("📱 ابعت رقمك بالكود الدولي\nمثال: `+201012345678`", buttons=[[Button.inline("🔙", b"back")]])
             bot.wait_phone = True
@@ -449,20 +465,20 @@ async def setup_bot():
 
         for gid in DB["groups"]:
             try:
+                await userbot(UpdateStatusRequest(offline=True))
                 perms = await userbot.get_permissions(int(gid), 'me')
                 if not perms.is_admin:
                     failed += 1
                     continue
 
-                if DB["stealth_mode"]:
-                    await userbot.send_read_acknowledge(int(gid), max_id=0)
+                await userbot.send_read_acknowledge(int(gid), max_id=0)
 
                 if post["media"]:
                     from telethon.tl.types import MessageMedia
                     media = MessageMedia.from_dict(post["media"])
-                    await userbot.send_file(int(gid), media, caption=post["text"], formatting_entities=entities, silent=DB["stealth_mode"])
+                    await userbot.send_file(int(gid), media, caption=post["text"], formatting_entities=entities, silent=True)
                 else:
-                    await userbot.send_message(int(gid), post["text"], formatting_entities=entities, silent=DB["stealth_mode"])
+                    await userbot.send_message(int(gid), post["text"], formatting_entities=entities, silent=True)
 
                 sent += 1
                 wait_time = random.randint(wait_min, wait_max)
@@ -527,18 +543,18 @@ async def setup_bot():
         if hasattr(bot, 'wait_code_activation') and bot.wait_code_activation == event.sender_id:
             bot.wait_code_activation = None
             code = event.text.strip().upper()
-            
+
             if code not in USERS["codes"]:
                 return await event.reply("❌ الكود غلط")
-            
+
             code_data = USERS["codes"][code]
             if code_data["used"]:
                 return await event.reply("❌ الكود مستخدم قبل كده")
-            
+
             expire = datetime.datetime.strptime(code_data["expire_date"], "%Y-%m-%d")
             if datetime.datetime.now() > expire:
                 return await event.reply("❌ الكود منتهي")
-            
+
             USERS["codes"][code]["used"] = True
             USERS["codes"][code]["user_id"] = event.sender_id
             USERS["users"][uid] = {
@@ -591,7 +607,16 @@ async def setup_bot():
             DB["phone"] = phone
             save_db()
 
-            userbot = TelegramClient(f'session_{phone}', API_ID, API_HASH, device_model=DEVICE_MODEL)
+            userbot = TelegramClient(
+                f'ios_{phone}',
+                API_ID,
+                API_HASH,
+                device_model=DEVICE_MODEL,
+                system_version=SYSTEM_VERSION,
+                app_version=APP_VERSION,
+                lang_code=LANG_CODE,
+                system_lang_code=SYSTEM_LANG_CODE
+            )
             await userbot.connect()
             try:
                 await userbot.send_code_request(phone)
@@ -609,7 +634,7 @@ async def setup_bot():
             try:
                 await userbot.sign_in(DB["phone"], code)
                 await start_userbot()
-                await msg.edit(*prem(f"✅ تم التسجيل بنجاح\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
+                await msg.edit(*prem(f"✅ تم التسجيل بنجاح\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}\n📲 Telegram {APP_VERSION}", "diamond"))
                 await start_panel(event)
             except SessionPasswordNeededError:
                 await msg.edit("🔐 الحساب عليه تحقق بخطوتين\nابعت كلمة السر:")
@@ -626,7 +651,7 @@ async def setup_bot():
             try:
                 await userbot.sign_in(password=password)
                 await start_userbot()
-                await msg.edit(*prem(f"✅ تم التسجيل\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
+                await msg.edit(*prem(f"✅ تم التسجيل\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}\n📲 Telegram {APP_VERSION}", "diamond"))
                 await start_panel(event)
             except Exception as e:
                 await msg.edit(f"❌ كلمة السر غلط: {e}")
@@ -700,7 +725,7 @@ async def main():
 
     await setup_bot()
     await start_userbot()
-    print(f"✅ Bot شغال | {DEVICE_MODEL} | انتظار: {DB['wait_min']}-{DB['wait_max']}ث | تخفي: {DB['stealth_mode']}")
+    print(f"✅ Bot iOS شغال | {DEVICE_MODEL} | iOS {SYSTEM_VERSION} | مخفي 👻")
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
