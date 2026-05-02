@@ -145,12 +145,15 @@ async def set_wait(event):
 async def toggle_stealth(event):
     DB["stealth_mode"] = not DB["stealth_mode"]
     save_db()
+    global userbot
     if userbot and await userbot.is_user_authorized():
-        if DB["stealth_mode"]:
-            await userbot(UpdateStatusRequest(offline=True))
-            await event.answer("👻 تم تفعيل وضع التخفي", alert=True)
-        else:
-            await event.answer("👁️ تم ايقاف وضع التخفي", alert=True)
+        try:
+            if DB["stealth_mode"]:
+                await userbot(UpdateStatusRequest(offline=True))
+                await event.answer("👻 تم تفعيل وضع التخفي", alert=True)
+            else:
+                await event.answer("👁️ تم ايقاف وضع التخفي", alert=True)
+        except: pass
     await start_panel(event)
 
 @bot.on(events.CallbackQuery(data=b"account"))
@@ -309,7 +312,9 @@ async def callbacks(event):
     if data == "change_phone":
         DB["phone"] = None
         save_db()
+        global userbot
         if userbot: await userbot.disconnect()
+        userbot = None
         await event.edit("📱 ابعت الرقم الجديد:\n`+201012345678`")
         bot.wait_phone = True
 
@@ -317,6 +322,7 @@ async def callbacks(event):
         DB["phone"] = None
         save_db()
         if userbot: await userbot.disconnect()
+        userbot = None
         await event.answer("🗑️ تم حذف الرقم", alert=True)
         await start_panel(event)
 
@@ -476,14 +482,17 @@ async def register_userbot_handlers():
 async def start_userbot():
     global userbot
     if DB["phone"]:
-        userbot = TelegramClient(f'session_{DB["phone"]}', API_ID, API_HASH, device_model=DEVICE_MODEL)
-        await userbot.connect()
-        if await userbot.is_user_authorized():
-            if DB["stealth_mode"]:
-                await userbot(UpdateStatusRequest(offline=True))
-            await register_userbot_handlers()
-            print(f"✅ {DEVICE_MODEL} شغال | انتظار: {DB['wait_min']}-{DB['wait_max']}ث")
-            return True
+        try:
+            userbot = TelegramClient(f'session_{DB["phone"]}', API_ID, API_HASH, device_model=DEVICE_MODEL)
+            await userbot.connect()
+            if await userbot.is_user_authorized():
+                if DB["stealth_mode"]:
+                    await userbot(UpdateStatusRequest(offline=True))
+                await register_userbot_handlers()
+                print(f"✅ {DEVICE_MODEL} شغال | انتظار: {DB['wait_min']}-{DB['wait_max']}ث")
+                return True
+        except Exception as e:
+            print(f"❌ خطأ في اليوزربوت: {e}")
     return False
 
 async def main():
