@@ -26,11 +26,14 @@ codes_db = "codes.json"
 
 # ========== نظام الاكواد ==========
 def load_codes():
-    if not os.path.exists(codes_db):
-        with open(codes_db, 'w') as f:
-            json.dump({"codes": {}}, f)
-    with open(codes_db, 'r') as f:
-        return json.load(f)
+    try:
+        if not os.path.exists(codes_db):
+            with open(codes_db, 'w') as f:
+                json.dump({"codes": {}}, f)
+        with open(codes_db, 'r') as f:
+            return json.load(f)
+    except:
+        return {"codes": {}}
 
 def save_codes(data):
     with open(codes_db, 'w') as f:
