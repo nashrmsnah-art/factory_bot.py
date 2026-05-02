@@ -1,29 +1,29 @@
-from telethon import TelegramClient, events, Button
-from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError, UserDeactivatedBanError, UserAlreadyParticipantError
-from telethon.tl.functions.channels import GetParticipantRequest, JoinChannelRequest
-from telethon.tl.types import MessageEntityCustomEmoji, MessageEntityBold, MessageEntityItalic, MessageEntityCode, MessageEntityPre, MessageEntityTextUrl, MessageEntityUrl, Channel
-from telethon.errors.rpcerrorlist import ChatWriteForbiddenError, ChatAdminRequiredError, UserBannedInChannelError, SlowModeWaitError, ChannelPrivateError, UserNotParticipantError, AuthKeyUnregisteredError, MessageNotModifiedError
-import asyncio
-import json
 import os
-from datetime import datetime, timedelta
-import random
-import re
+import json
+import asyncio
+from datetime import datetime
+from telethon import TelegramClient, events, Button
+from telethon.tl.functions.channels import GetParticipantRequest
+from telethon.errors import UserNotParticipantError
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# ===== بيانات البوت =====
+# ========== الإعدادات - المصنع هيعدلها تلقائي ==========
 API_ID = 31650696
 API_HASH = '2829d6502df68cd12fab33cabf2851d2'
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = 154919127
-DEVELOPER_USERNAME = 'Devazf'
-DEVELOPER_LINK = f'https://t.me/{DEVELOPER_USERNAME}'
-REQUIRED_CHANNELS = ['Vip6705']
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+DEVELOPER_ID = int(os.getenv("DEVELOPER_ID", "154919127"))
+DEVELOPER_USERNAME = "Devazf"
+REQUIRED_CHANNELS = []
+LICENSE_CODE = "FACTORY-XXXX"
+
+client = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 DB_FILE = 'database.json'
-BACKUP_FILE = 'sessions_backup.json'
-SUB_PRICE = 3
-MAX_ACCOUNTS = 1
-FREE_TRIAL_DAYS = 1
+scheduler = AsyncIOScheduler()
+
+# ========== قاعدة البيانات ==========
+def load_db():
+    if not os.path.exists(DB_FILE):
 
 bot = TelegramClient('bot', API_ID, API_HASH)
 db = {'users': {}, 'codes': {}, 'stats': {'total_sent': 0}, 'login_notifications': True}
