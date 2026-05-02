@@ -1,7 +1,0 @@
-*.json
-*.session
-__pycache__/
-.env
-db_*.json
-backup_*.json
-client_bots/
