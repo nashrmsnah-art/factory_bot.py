@@ -21,37 +21,26 @@ def load_db():
         "emoji": {},
         "welcome": "نورت يا {name} 💎",
         "replies": ["موجود ✨", "اؤمرني 🌟", "معاك 💎"],
-        "wait_min": 5, # وقت الانتظار بين الجروبات
+        "wait_min": 5,
         "wait_max": 10,
         "stealth_mode": False,
         "temp_post": None,
-        "scheduled_time": None # توقيت النشر
+        "scheduled_time": None
     }
 
 def save_db():
     with open(DB_FILE, 'w', encoding='utf-8') as f: json.dump(DB, f, indent=2, ensure_ascii=False)
 
 DB = load_db()
-
 userbot = None
-async def start_userbot():
-    global userbot
-    if DB["phone"]:
-        userbot = TelegramClient(f'session_{DB["phone"]}', API_ID, API_HASH, device_model=DEVICE_MODEL)
-        await userbot.connect()
-        if await userbot.is_user_authorized():
-            if DB["stealth_mode"]:
-                await userbot(UpdateStatusRequest(offline=True))
-            print(f"✅ {DEVICE_MODEL} شغال | انتظار: {DB['wait_min']}-{DB['wait_max']}ث")
-            return True
-    return False
-
-bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 def prem(text, key="diamond"):
     if key not in DB["emoji"]: return text, []
     entity = MessageEntityCustomEmoji(0, len(text), int(DB["emoji"][key]))
     return text, [entity]
+
+# ========== بوت التحكم ==========
+bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 @bot.on(events.NewMessage(pattern='/start'))
 async def start_panel(event):
@@ -73,7 +62,7 @@ async def start_panel(event):
     txt, ents = prem(f"🤖 Azef Sender V23 💎\n\nالجلسة: {DEVICE_MODEL}\nالجروبات: {len(DB['groups'])}\nالانتظار: {wait_status}\nالنشر: {schedule_status}\nالتخفي: {stealth_status}", "diamond")
     await event.reply(txt, buttons=btns, formatting_entities=ents)
 
-# ========== توقيت النشر - امتى يبدأ ==========
+# ========== توقيت النشر ==========
 @bot.on(events.CallbackQuery(data=b"schedule_time"))
 async def schedule_time_menu(event):
     btns = [
@@ -83,7 +72,7 @@ async def schedule_time_menu(event):
         [Button.inline("✏️ وقت مخصص", b"sched_custom"), Button.inline("🔙", b"back")]
     ]
     current = DB["scheduled_time"] or "فوري"
-    await event.edit(f"⏰ **توقيت النشر:**\n\nالحالي: `{current}`\n\nده وقت بدء النشر اول مرة\nبعد كده هيكمل حسب وقت الانتظار", buttons=btns)
+    await event.edit(f"⏰ **توقيت النشر:**\n\nالحالي: `{current}`\n\nده وقت بدء النشر اول مرة", buttons=btns)
 
 @bot.on(events.CallbackQuery(pattern=b"sched_"))
 async def set_schedule(event):
@@ -228,7 +217,7 @@ async def handle_input(event):
         msg = await event.reply("⏳ جاري تسجيل الدخول...")
         try:
             await userbot.sign_in(DB["phone"], code)
-            if DB["stealth_mode"]: await userbot(UpdateStatusRequest(offline=True))
+            await start_userbot()
             await msg.edit(*prem(f"✅ تم التسجيل بنجاح\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
             await start_panel(event)
         except SessionPasswordNeededError:
@@ -245,7 +234,7 @@ async def handle_input(event):
         msg = await event.reply("⏳ جاري التحقق...")
         try:
             await userbot.sign_in(password=password)
-            if DB["stealth_mode"]: await userbot(UpdateStatusRequest(offline=True))
+            await start_userbot()
             await msg.edit(*prem(f"✅ تم التسجيل\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
             await start_panel(event)
         except Exception as e:
@@ -400,7 +389,6 @@ async def callbacks(event):
         if not DB.get("temp_post"):
             return await event.answer("❌ مفيش منشور", alert=True)
 
-        # لو في توقيت مجدول
         if DB["scheduled_time"]:
             sched_time = datetime.datetime.strptime(DB["scheduled_time"], "%Y-%m-%d %H:%M")
             now = datetime.datetime.now()
@@ -468,18 +456,35 @@ async def add_emoji(event):
             txt, ents = prem(f"✅ اتحفظ {name} ", name)
             return await event.reply(txt, formatting_entities=ents)
 
-@userbot.on(events.ChatAction)
-async def welcome(event):
-    if event.chat_id in DB["groups"] and event.user_joined:
-        text = DB["welcome"].format(name=event.user.first_name, username=event.user.username or "بدون")
-        await event.reply(text, silent=DB["stealth_mode"])
+# ========== اليوزربوت ==========
+async def register_userbot_handlers():
+    global userbot
 
-@userbot.on(events.NewMessage)
-async def mention_reply(event):
-    if event.chat_id in DB["groups"] and event.mentioned:
-        reply = random.choice(DB["replies"])
-        txt, ents = prem(reply, "sparkles")
-        await event.reply(txt, formatting_entities=ents, silent=DB["stealth_mode"])
+    @userbot.on(events.ChatAction)
+    async def welcome(event):
+        if event.chat_id in DB["groups"] and event.user_joined:
+            text = DB["welcome"].format(name=event.user.first_name, username=event.user.username or "بدون")
+            await event.reply(text, silent=DB["stealth_mode"])
+
+    @userbot.on(events.NewMessage)
+    async def mention_reply(event):
+        if event.chat_id in DB["groups"] and event.mentioned:
+            reply = random.choice(DB["replies"])
+            txt, ents = prem(reply, "sparkles")
+            await event.reply(txt, formatting_entities=ents, silent=DB["stealth_mode"])
+
+async def start_userbot():
+    global userbot
+    if DB["phone"]:
+        userbot = TelegramClient(f'session_{DB["phone"]}', API_ID, API_HASH, device_model=DEVICE_MODEL)
+        await userbot.connect()
+        if await userbot.is_user_authorized():
+            if DB["stealth_mode"]:
+                await userbot(UpdateStatusRequest(offline=True))
+            await register_userbot_handlers()
+            print(f"✅ {DEVICE_MODEL} شغال | انتظار: {DB['wait_min']}-{DB['wait_max']}ث")
+            return True
+    return False
 
 async def main():
     await start_userbot()
