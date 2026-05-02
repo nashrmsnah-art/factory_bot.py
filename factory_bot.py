@@ -221,19 +221,18 @@ async def callback(event):
         msg = await event.edit('⏳ **جاري انشاء البوت...**\n\n1/7 تحميل كود البوت...')
 
         try:
-            # 1. تحميل كود البوت بتاعك من GitHub
-            r = requests.get(BOT_TEMPLATE_URL)
-            if r.status_code!= 200:
-                raise Exception('فشل تحميل كود البوت من GitHub')
-            bot_code = r.text
-
-            # 2. تبديل البيانات
-       import re
-       bot_code = re.sub(r'BOT_TOKEN\s*=\s*["\'].*?["\']', 'BOT_TOKEN = os.getenv("BOT_TOKEN")', bot_code)
-       bot_code = re.sub(r'ADMIN_ID\s*=\s*\d+', f'ADMIN_ID = {pending["admin_id"]}', bot_code)
-       bot_code = re.sub(r'DEVELOPER_USERNAME\s*=\s*["\'].*?["\']', f'DEVELOPER_USERNAME = "{pending["dev_username"]}"', bot_code)
-       bot_code = re.sub(r'REQUIRED_CHANNELS\s*=\s*\[.*?\]', f'REQUIRED_CHANNELS = {pending["channels"]}', bot_code)
-
+            # 1. تحميل القالب
+            response = requests.get(BOT_TEMPLATE_URL)
+            bot_code = response.text
+            
+            # 2. تبديل البيانات بـ regex
+            import re
+            bot_code = re.sub(r'BOT_TOKEN\s*=\s*["\'].*?["\']', 'BOT_TOKEN = os.getenv("BOT_TOKEN")', bot_code)
+            bot_code = re.sub(r'ADMIN_ID\s*=\s*\d+', f'ADMIN_ID = {pending[user_id]["admin_id"]}', bot_code)
+            bot_code = re.sub(r'DEVELOPER_USERNAME\s*=\s*["\'].*?["\']', f'DEVELOPER_USERNAME = "{pending[user_id]["dev_username"]}"', bot_code)
+            bot_code = re.sub(r'REQUIRED_CHANNELS\s*=\s*\[.*?\]', f'REQUIRED_CHANNELS = {pending[user_id]["channels"]}', bot_code)
+            
+            random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
             await msg.edit('⏳ **جاري انشاء البوت...**\n\n2/7 رفع على GitHub...')
 
             # 3. رفع على GitHub
