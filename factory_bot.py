@@ -228,11 +228,11 @@ async def callback(event):
             bot_code = r.text
 
             # 2. تبديل البيانات
-   import re
-   bot_code = re.sub(r'BOT_TOKEN\s*=\s*["\'].*?["\']', 'BOT_TOKEN = os.getenv("BOT_TOKEN")', bot_code)
-   bot_code = re.sub(r'ADMIN_ID\s*=\s*\d+', f'ADMIN_ID = {pending["admin_id"]}', bot_code)
-   bot_code = re.sub(r'DEVELOPER_USERNAME\s*=\s*["\'].*?["\']', f'DEVELOPER_USERNAME = "{pending["dev_username"]}"', bot_code)
-   bot_code = re.sub(r'REQUIRED_CHANNELS\s*=\s*\[.*?\]', f'REQUIRED_CHANNELS = {pending["channels"]}', bot_code)
+       import re
+       bot_code = re.sub(r'BOT_TOKEN\s*=\s*["\'].*?["\']', 'BOT_TOKEN = os.getenv("BOT_TOKEN")', bot_code)
+       bot_code = re.sub(r'ADMIN_ID\s*=\s*\d+', f'ADMIN_ID = {pending["admin_id"]}', bot_code)
+       bot_code = re.sub(r'DEVELOPER_USERNAME\s*=\s*["\'].*?["\']', f'DEVELOPER_USERNAME = "{pending["dev_username"]}"', bot_code)
+       bot_code = re.sub(r'REQUIRED_CHANNELS\s*=\s*\[.*?\]', f'REQUIRED_CHANNELS = {pending["channels"]}', bot_code)
 
             await msg.edit('⏳ **جاري انشاء البوت...**\n\n2/7 رفع على GitHub...')
 
