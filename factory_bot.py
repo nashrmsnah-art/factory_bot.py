@@ -145,8 +145,8 @@ async def start(event):
         "• دعم فني 24/7\n\n"
         "💰 السعر: 10$ مدى الحياة\n\n"
         "ارسل /newbot عشان تبدأ\n"
-        "للشراء تواصل مع المطور: @nashrmsnah",
-        buttons=[[Button.url("💬 تواصل مع المطور", "https://t.me/nashrmsnah")]]
+        "للشراء تواصل مع المطور: @devazf",
+        buttons=[[Button.url("💬 تواصل مع المطور", "https://t.me/devazf")]]
     )
 
 @client.on(events.NewMessage(pattern='/newbot'))
