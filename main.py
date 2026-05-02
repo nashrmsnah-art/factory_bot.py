@@ -33,438 +33,17 @@ def save_db():
 
 DB = load_db()
 userbot = None
+bot = None
 
 def prem(text, key="diamond"):
     if key not in DB["emoji"]: return text, []
     entity = MessageEntityCustomEmoji(0, len(text), int(DB["emoji"][key]))
     return text, [entity]
 
-# ========== بوت التحكم ==========
-bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
-
-@bot.on(events.NewMessage(pattern='/start'))
-async def start_panel(event):
-    if event.sender_id!= DEV_ID: return await event.reply("البوت خاص. @Devazf")
-
-    phone_status = f"✅ {DB['phone']}" if DB["phone"] else "❌ مش متضاف"
-    wait_status = f"{DB['wait_min']}-{DB['wait_max']}ث"
-    stealth_status = "👻 مفعل" if DB["stealth_mode"] else "👁️ معطل"
-    schedule_status = DB["scheduled_time"] or "فوري"
-
-    btns = [
-        [Button.inline(f"📱 الحساب: {phone_status}", b"account")],
-        [Button.inline("👥 جلب المجموعات", b"get_groups"), Button.inline("📝 مجموعاتي", b"my_groups")],
-        [Button.inline("📤 نشر الآن", b"send_post"), Button.inline("👁️ معاينة", b"preview")],
-        [Button.inline("⏰ توقيت النشر", b"schedule_time"), Button.inline(f"⏳ الانتظار: {wait_status}", b"set_wait")],
-        [Button.inline(f"👻 تخفي: {stealth_status}", b"toggle_stealth"), Button.inline("👋 الترحيب", b"set_welcome")],
-        [Button.inline("💬 الردود", b"set_replies"), Button.inline("🎨 ايموجي", b"emoji")]
-    ]
-    txt, ents = prem(f"🤖 Azef Sender V23 💎\n\nالجلسة: {DEVICE_MODEL}\nالجروبات: {len(DB['groups'])}\nالانتظار: {wait_status}\nالنشر: {schedule_status}\nالتخفي: {stealth_status}", "diamond")
-    await event.reply(txt, buttons=btns, formatting_entities=ents)
-
-# ========== توقيت النشر ==========
-@bot.on(events.CallbackQuery(data=b"schedule_time"))
-async def schedule_time_menu(event):
-    btns = [
-        [Button.inline("⚡ الآن فوري", b"sched_now")],
-        [Button.inline("⏰ بعد ساعة", b"sched_1h"), Button.inline("⏰ بعد 3 ساعات", b"sched_3h")],
-        [Button.inline("🌙 الساعة 10 بليل", b"sched_10pm"), Button.inline("🌅 الساعة 9 الصبح", b"sched_9am")],
-        [Button.inline("✏️ وقت مخصص", b"sched_custom"), Button.inline("🔙", b"back")]
-    ]
-    current = DB["scheduled_time"] or "فوري"
-    await event.edit(f"⏰ **توقيت النشر:**\n\nالحالي: `{current}`\n\nده وقت بدء النشر اول مرة", buttons=btns)
-
-@bot.on(events.CallbackQuery(pattern=b"sched_"))
-async def set_schedule(event):
-    data = event.data.decode()
-    now = datetime.datetime.now()
-
-    if data == "sched_now":
-        DB["scheduled_time"] = None
-        await event.answer("⚡ هيتنشر فوري", alert=True)
-    elif data == "sched_1h":
-        time = now + datetime.timedelta(hours=1)
-        DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
-        await event.answer(f"⏰ هيتنشر الساعة {time.strftime('%H:%M')}", alert=True)
-    elif data == "sched_3h":
-        time = now + datetime.timedelta(hours=3)
-        DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
-        await event.answer(f"⏰ هيتنشر الساعة {time.strftime('%H:%M')}", alert=True)
-    elif data == "sched_10pm":
-        time = now.replace(hour=22, minute=0, second=0)
-        if time < now: time += datetime.timedelta(days=1)
-        DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
-        await event.answer("🌙 هيتنشر الساعة 10:00 بليل", alert=True)
-    elif data == "sched_9am":
-        time = now.replace(hour=9, minute=0, second=0)
-        if time < now: time += datetime.timedelta(days=1)
-        DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
-        await event.answer("🌅 هيتنشر الساعة 9:00 الصبح", alert=True)
-    elif data == "sched_custom":
-        await event.edit("✏️ ابعت الوقت:\n\nصيغة: `YYYY-MM-DD HH:MM`\nمثال: `2026-05-03 14:30`", buttons=[[Button.inline("🔙", b"schedule_time")]])
-        bot.wait_schedule = True
-        return
-
-    save_db()
-    await start_panel(event)
-
-# ========== وقت الانتظار بين الجروبات ==========
-@bot.on(events.CallbackQuery(data=b"set_wait"))
-async def set_wait_menu(event):
-    btns = [
-        [Button.inline("⚡ 5-10 ثواني", b"wait_5_10")],
-        [Button.inline("🔵 10-20 ثانية", b"wait_10_20")],
-        [Button.inline("🟡 30-60 ثانية", b"wait_30_60")],
-        [Button.inline("🟢 60-120 ثانية", b"wait_60_120")],
-        [Button.inline("✏️ مخصص", b"wait_custom"), Button.inline("🔙", b"back")]
-    ]
-    current = f"{DB['wait_min']}-{DB['wait_max']} ثانية"
-    await event.edit(f"⏳ **وقت الانتظار بين كل جروب:**\n\nالحالي: `{current}`\n\n⚡ 5-10ث = سريع بس خطر\n🔵 10-20ث = متوازن\n🟡 30-60ث = آمن\n🟢 60-120ث = آمن جدا", buttons=btns)
-
-@bot.on(events.CallbackQuery(pattern=b"wait_"))
-async def set_wait(event):
-    data = event.data.decode()
-    if data == "wait_5_10":
-        DB["wait_min"], DB["wait_max"] = 5, 10
-    elif data == "wait_10_20":
-        DB["wait_min"], DB["wait_max"] = 10, 20
-    elif data == "wait_30_60":
-        DB["wait_min"], DB["wait_max"] = 30, 60
-    elif data == "wait_60_120":
-        DB["wait_min"], DB["wait_max"] = 60, 120
-    elif data == "wait_custom":
-        await event.edit("✏️ ابعت رقمين:\n\nمثال: `15 30`\nالاول الحد الادنى والثاني الاقصى بالثواني", buttons=[[Button.inline("🔙", b"set_wait")]])
-        bot.wait_delay = True
-        return
-
-    save_db()
-    await event.answer(f"✅ تم التعيين {DB['wait_min']}-{DB['wait_max']}ث", alert=True)
-    await start_panel(event)
-
-@bot.on(events.CallbackQuery(data=b"toggle_stealth"))
-async def toggle_stealth(event):
-    DB["stealth_mode"] = not DB["stealth_mode"]
-    save_db()
-    global userbot
-    if userbot and await userbot.is_user_authorized():
-        try:
-            if DB["stealth_mode"]:
-                await userbot(UpdateStatusRequest(offline=True))
-                await event.answer("👻 تم تفعيل وضع التخفي", alert=True)
-            else:
-                await event.answer("👁️ تم ايقاف وضع التخفي", alert=True)
-        except: pass
-    await start_panel(event)
-
-@bot.on(events.CallbackQuery(data=b"account"))
-async def manage_account(event):
-    if DB["phone"]:
-        btns = [[Button.inline("🔄 تغيير الرقم", b"change_phone")], [Button.inline("🗑️ حذف الرقم", b"del_phone")], [Button.inline("🔙", b"back")]]
-        await event.edit(f"📱 الرقم الحالي:\n`{DB['phone']}`\n\nالجلسة: {DEVICE_MODEL}", buttons=btns)
-    else:
-        await event.edit("📱 ابعت رقمك بالكود الدولي\nمثال: `+201012345678`", buttons=[[Button.inline("🔙", b"back")]])
-        bot.wait_phone = True
-
-@bot.on(events.CallbackQuery(data=b"set_welcome"))
-async def set_welcome(event):
-    await event.edit(f"👋 الترحيب الحالي:\n\n{DB['welcome']}\n\nابعت الترحيب الجديد:\nتقدر تستخدم {{name}} و {{username}}\nوتنسق براحتك **عريض** *مائل*", buttons=[[Button.inline("🔙", b"back")]])
-    bot.wait_welcome = True
-
-@bot.on(events.CallbackQuery(data=b"set_replies"))
-async def set_replies(event):
-    replies_text = "\n".join([f"{i+1}. {r}" for i, r in enumerate(DB["replies"])])
-    btns = [[Button.inline("➕ اضافة رد", b"add_reply")], [Button.inline("🗑️ حذف آخر رد", b"del_reply"), Button.inline("🔙", b"back")]]
-    await event.edit(f"💬 الردود الحالية:\n\n{replies_text}", buttons=btns)
-
-@bot.on(events.CallbackQuery(data=b"add_reply"))
-async def add_reply(event):
-    await event.edit("ابعت الرد الجديد:\nنسقه من تيليجرام **عريض** *مائل* + ايموجي بريميوم", buttons=[[Button.inline("🔙", b"set_replies")]])
-    bot.wait_reply = True
-
-@bot.on(events.CallbackQuery(data=b"del_reply"))
-async def del_reply(event):
-    if DB["replies"]:
-        DB["replies"].pop()
-        save_db()
-        await event.answer("🗑️ تم حذف آخر رد", alert=True)
-    await set_replies(event)
-
-@bot.on(events.NewMessage)
-async def handle_input(event):
-    global userbot
-
-    if hasattr(bot, 'wait_phone') and bot.wait_phone and event.sender_id == DEV_ID:
-        bot.wait_phone = False
-        phone = event.text.strip()
-        if not phone.startswith('+'):
-            return await event.reply("❌ لازم يبدأ بـ + مثال: +2010")
-
-        msg = await event.reply("⏳ جاري ارسال الكود...")
-        DB["phone"] = phone
-        save_db()
-
-        userbot = TelegramClient(f'session_{phone}', API_ID, API_HASH, device_model=DEVICE_MODEL)
-        await userbot.connect()
-        try:
-            await userbot.send_code_request(phone)
-            await msg.edit("✅ اتبعت الكود على تيليجرام\nابعت الكود هنا:")
-            bot.wait_code = True
-        except Exception as e:
-            await msg.edit(f"❌ خطأ: {e}")
-            DB["phone"] = None
-            save_db()
-
-    elif hasattr(bot, 'wait_code') and bot.wait_code and event.sender_id == DEV_ID:
-        bot.wait_code = False
-        code = event.text.strip()
-        msg = await event.reply("⏳ جاري تسجيل الدخول...")
-        try:
-            await userbot.sign_in(DB["phone"], code)
-            await start_userbot()
-            await msg.edit(*prem(f"✅ تم التسجيل بنجاح\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
-            await start_panel(event)
-        except SessionPasswordNeededError:
-            await msg.edit("🔐 الحساب عليه تحقق بخطوتين\nابعت كلمة السر:")
-            bot.wait_2fa = True
-        except PhoneCodeInvalidError:
-            await msg.edit("❌ الكود غلط\nابعت /start وجرب تاني")
-        except Exception as e:
-            await msg.edit(f"❌ خطأ: {e}")
-
-    elif hasattr(bot, 'wait_2fa') and bot.wait_2fa and event.sender_id == DEV_ID:
-        bot.wait_2fa = False
-        password = event.text.strip()
-        msg = await event.reply("⏳ جاري التحقق...")
-        try:
-            await userbot.sign_in(password=password)
-            await start_userbot()
-            await msg.edit(*prem(f"✅ تم التسجيل\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
-            await start_panel(event)
-        except Exception as e:
-            await msg.edit(f"❌ كلمة السر غلط: {e}")
-
-    elif hasattr(bot, 'wait_schedule') and bot.wait_schedule and event.sender_id == DEV_ID:
-        bot.wait_schedule = False
-        try:
-            dt = datetime.datetime.strptime(event.text.strip(), "%Y-%m-%d %H:%M")
-            if dt < datetime.datetime.now():
-                return await event.reply("❌ التاريخ ده عدى خلاص")
-            DB["scheduled_time"] = event.text.strip()
-            save_db()
-            await event.reply(f"✅ هيتنشر في:\n`{DB['scheduled_time']}`", buttons=[[Button.inline("🔙", b"back")]])
-        except:
-            await event.reply("❌ صيغة غلط\nمثال: `2026-05-03 14:30`", buttons=[[Button.inline("🔙", b"schedule_time")]])
-
-    elif hasattr(bot, 'wait_delay') and bot.wait_delay and event.sender_id == DEV_ID:
-        bot.wait_delay = False
-        try:
-            parts = event.text.split()
-            min_delay = int(parts[0])
-            max_delay = int(parts[1])
-            if min_delay >= max_delay: raise ValueError
-            if min_delay < 3: raise ValueError("اقل حاجة 3 ثواني")
-
-            DB["wait_min"] = min_delay
-            DB["wait_max"] = max_delay
-            save_db()
-            await event.reply(f"✅ تم التعيين\n\nالحد الادنى: {min_delay}ث\nالحد الاقصى: {max_delay}ث", buttons=[[Button.inline("🔙", b"back")]])
-        except:
-            await event.reply("❌ صيغة غلط\nمثال صحيح: `15 30`", buttons=[[Button.inline("🔙", b"set_wait")]])
-
-    elif hasattr(bot, 'wait_welcome') and bot.wait_welcome and event.sender_id == DEV_ID:
-        bot.wait_welcome = False
-        DB["welcome"] = event.text
-        save_db()
-        await event.reply("✅ تم تعيين الترحيب الجديد", buttons=[[Button.inline("🔙", b"back")]])
-
-    elif hasattr(bot, 'wait_reply') and bot.wait_reply and event.sender_id == DEV_ID:
-        bot.wait_reply = False
-        DB["replies"].append(event.text)
-        save_db()
-        await event.reply(f"✅ تم اضافة الرد رقم {len(DB['replies'])}", buttons=[[Button.inline("🔙", b"set_replies")]])
-
-    elif hasattr(bot, 'wait_post') and bot.wait_post and event.sender_id == DEV_ID:
-        bot.wait_post = False
-        if not userbot or not await userbot.is_user_authorized():
-            return await event.reply("❌ ضيف رقم الاول")
-
-        if not DB["groups"]: return await event.reply("❌ ضيف جروبات الاول")
-
-        DB["temp_post"] = {
-            "text": event.message.text,
-            "entities": [e.to_dict() for e in event.message.entities or []],
-            "media": event.message.media.to_dict() if event.message.media else None
-        }
-        save_db()
-
-        wait_text = f"{DB['wait_min']}-{DB['wait_max']} ثانية"
-        sched_text = DB["scheduled_time"] or "فوري"
-        btns = [
-            [Button.inline("✅ نشر الآن", b"confirm_post"), Button.inline("👁️ معاينة", b"preview")],
-            [Button.inline("❌ الغاء", b"back")]
-        ]
-        await event.reply(f"📝 تم حفظ المنشور\n\nالجروبات: {len(DB['groups'])}\nالنشر: {sched_text}\nالانتظار: {wait_text}\nالتخفي: {'مفعل' if DB['stealth_mode'] else 'معطل'}", buttons=btns)
-
-@bot.on(events.CallbackQuery)
-async def callbacks(event):
-    data = event.data.decode()
-
-    if data == "change_phone":
-        DB["phone"] = None
-        save_db()
-        global userbot
-        if userbot: await userbot.disconnect()
-        userbot = None
-        await event.edit("📱 ابعت الرقم الجديد:\n`+201012345678`")
-        bot.wait_phone = True
-
-    elif data == "del_phone":
-        DB["phone"] = None
-        save_db()
-        if userbot: await userbot.disconnect()
-        userbot = None
-        await event.answer("🗑️ تم حذف الرقم", alert=True)
-        await start_panel(event)
-
-    elif data == "get_groups":
-        if not userbot or not await userbot.is_user_authorized():
-            return await event.answer("❌ ضيف رقم الاول", alert=True)
-
-        await event.answer("⏳ جاري الجلب...", alert=False)
-        dialogs = await userbot.get_dialogs()
-        bot.temp_groups = []
-        text = "**👥 جروباتك:**\n\n"
-
-        for d in dialogs:
-            if d.is_group:
-                try:
-                    perms = await userbot.get_permissions(d.id, 'me')
-                    if perms.is_admin:
-                        bot.temp_groups.append({"id": d.id, "name": d.name})
-                        text += f"• {d.name}\n`{d.id}`\n\n"
-                except: pass
-
-        btns = [[Button.inline(f"➕ اضافة الكل ({len(bot.temp_groups)})", b"add_all")], [Button.inline("🔙", b"back")]]
-        await event.edit(text[:4000], buttons=btns)
-
-    elif data == "add_all":
-        if hasattr(bot, 'temp_groups'):
-            added = 0
-            for g in bot.temp_groups:
-                if g["id"] not in DB["groups"]:
-                    DB["groups"].append(g["id"])
-                    added += 1
-            save_db()
-            await event.answer(f"✅ تم اضافة {added} جروب", alert=True)
-            await start_panel(event)
-
-    elif data == "my_groups":
-        if not DB["groups"]: return await event.edit("❌ مفيش جروبات", buttons=[[Button.inline("🔙", b"back")]])
-        text = "**📝 جروبات النشر:**\n\n"
-        for gid in DB["groups"]:
-            try:
-                chat = await userbot.get_entity(int(gid))
-                text += f"• {chat.title}\n`{gid}`\n\n"
-            except: text += f"• محذوف `{gid}`\n\n"
-        await event.edit(text, buttons=[[Button.inline("🗑️ حذف الكل", b"clear_groups")], [Button.inline("🔙", b"back")]])
-
-    elif data == "clear_groups":
-        DB["groups"] = []
-        save_db()
-        await event.answer("🗑️ تم", alert=True)
-        await start_panel(event)
-
-    elif data == "send_post":
-        if not userbot or not await userbot.is_user_authorized():
-            return await event.answer("❌ ضيف رقم الاول", alert=True)
-        await event.edit("ابعت المنشور دلوقتي:\n\nنسق براحتك من تيليجرام\n**عريض** *مائل* `كود` __تحته خط__\n+ ايموجي بريميوم + صور + فيديو", buttons=[[Button.inline("🔙", b"back")]])
-        bot.wait_post = True
-
-    elif data == "preview":
-        if not DB.get("temp_post"):
-            return await event.answer("❌ مفيش منشور محفوظ", alert=True)
-
-        post = DB["temp_post"]
-        from telethon.tl.types import MessageEntity
-        entities = [MessageEntity.from_dict(e) for e in post["entities"]]
-
-        btns = [[Button.inline("✅ نشر الآن", b"confirm_post")], [Button.inline("🔙", b"back")]]
-        await event.edit("👁️ **معاينة المنشور:**\n\n" + post["text"], buttons=btns, formatting_entities=entities)
-
-    elif data == "confirm_post":
-        if not DB.get("temp_post"):
-            return await event.answer("❌ مفيش منشور", alert=True)
-
-        if DB["scheduled_time"]:
-            sched_time = datetime.datetime.strptime(DB["scheduled_time"], "%Y-%m-%d %H:%M")
-            now = datetime.datetime.now()
-            if sched_time > now:
-                wait_seconds = (sched_time - now).total_seconds()
-                await event.edit(f"⏰ تم الجدولة\n\nهيتنشر في: `{DB['scheduled_time']}`\nبعد: {int(wait_seconds/60)} دقيقة")
-                await asyncio.sleep(wait_seconds)
-                DB["scheduled_time"] = None
-                save_db()
-
-        post = DB["temp_post"]
-        from telethon.tl.types import MessageEntity
-        entities = [MessageEntity.from_dict(e) for e in post["entities"]]
-        wait_min, wait_max = DB["wait_min"], DB["wait_max"]
-
-        msg = await event.edit(f"⏳ جاري النشر في {len(DB['groups'])} جروب...\nالانتظار: {wait_min}-{wait_max}ث")
-        sent, failed = 0, 0
-
-        for gid in DB["groups"]:
-            try:
-                perms = await userbot.get_permissions(int(gid), 'me')
-                if not perms.is_admin:
-                    failed += 1
-                    continue
-
-                if DB["stealth_mode"]:
-                    await userbot.send_read_acknowledge(int(gid), max_id=0)
-
-                if post["media"]:
-                    from telethon.tl.types import MessageMedia
-                    media = MessageMedia.from_dict(post["media"])
-                    await userbot.send_file(int(gid), media, caption=post["text"], formatting_entities=entities, silent=DB["stealth_mode"])
-                else:
-                    await userbot.send_message(int(gid), post["text"], formatting_entities=entities, silent=DB["stealth_mode"])
-
-                sent += 1
-                wait_time = random.randint(wait_min, wait_max)
-                await asyncio.sleep(wait_time)
-
-            except FloodWaitError as e:
-                await msg.edit(f"⚠️ تيليجرام عامل حظر مؤقت {e.seconds} ثانية\nزود وقت الانتظار")
-                return
-            except Exception as e:
-                failed += 1
-                print(f"Failed {gid}: {e}")
-
-        DB["temp_post"] = None
-        save_db()
-        txt, ents = prem(f"✅ تم\n\nمرسل: {sent}\nفشل: {failed}\nالانتظار: {wait_min}-{wait_max}ث ", "diamond")
-        await msg.edit(txt, formatting_entities=ents)
-
-    elif data == "back":
-        await start_panel(event)
-
-@bot.on(events.NewMessage(pattern=r'/emoji (\w+)'))
-async def add_emoji(event):
-    if event.sender_id!= DEV_ID: return
-    if not event.is_reply: return await event.reply("❌ رد على الايموجي البريميوم")
-    reply = await event.get_reply_message()
-    name = event.pattern_match.group(1)
-    for ent in reply.entities or []:
-        if isinstance(ent, MessageEntityCustomEmoji):
-            DB["emoji"][name] = ent.document_id
-            save_db()
-            txt, ents = prem(f"✅ اتحفظ {name} ", name)
-            return await event.reply(txt, formatting_entities=ents)
-
 # ========== اليوزربوت ==========
 async def register_userbot_handlers():
     global userbot
+    if not userbot: return
 
     @userbot.on(events.ChatAction)
     async def welcome(event):
@@ -495,7 +74,436 @@ async def start_userbot():
             print(f"❌ خطأ في اليوزربوت: {e}")
     return False
 
+# ========== بوت التحكم ==========
+async def setup_bot():
+    global bot
+    bot = TelegramClient('bot_session', API_ID, API_HASH)
+    await bot.start(bot_token=BOT_TOKEN)
+
+    @bot.on(events.NewMessage(pattern='/start'))
+    async def start_panel(event):
+        if event.sender_id!= DEV_ID: return await event.reply("البوت خاص. @Devazf")
+
+        phone_status = f"✅ {DB['phone']}" if DB["phone"] else "❌ مش متضاف"
+        wait_status = f"{DB['wait_min']}-{DB['wait_max']}ث"
+        stealth_status = "👻 مفعل" if DB["stealth_mode"] else "👁️ معطل"
+        schedule_status = DB["scheduled_time"] or "فوري"
+
+        btns = [
+            [Button.inline(f"📱 الحساب: {phone_status}", b"account")],
+            [Button.inline("👥 جلب المجموعات", b"get_groups"), Button.inline("📝 مجموعاتي", b"my_groups")],
+            [Button.inline("📤 نشر الآن", b"send_post"), Button.inline("👁️ معاينة", b"preview")],
+            [Button.inline("⏰ توقيت النشر", b"schedule_time"), Button.inline(f"⏳ الانتظار: {wait_status}", b"set_wait")],
+            [Button.inline(f"👻 تخفي: {stealth_status}", b"toggle_stealth"), Button.inline("👋 الترحيب", b"set_welcome")],
+            [Button.inline("💬 الردود", b"set_replies"), Button.inline("🎨 ايموجي", b"emoji")]
+        ]
+        txt, ents = prem(f"🤖 Azef Sender V23 💎\n\nالجلسة: {DEVICE_MODEL}\nالجروبات: {len(DB['groups'])}\nالانتظار: {wait_status}\nالنشر: {schedule_status}\nالتخفي: {stealth_status}", "diamond")
+        await event.reply(txt, buttons=btns, formatting_entities=ents)
+
+    @bot.on(events.CallbackQuery(data=b"schedule_time"))
+    async def schedule_time_menu(event):
+        btns = [
+            [Button.inline("⚡ الآن فوري", b"sched_now")],
+            [Button.inline("⏰ بعد ساعة", b"sched_1h"), Button.inline("⏰ بعد 3 ساعات", b"sched_3h")],
+            [Button.inline("🌙 الساعة 10 بليل", b"sched_10pm"), Button.inline("🌅 الساعة 9 الصبح", b"sched_9am")],
+            [Button.inline("✏️ وقت مخصص", b"sched_custom"), Button.inline("🔙", b"back")]
+        ]
+        current = DB["scheduled_time"] or "فوري"
+        await event.edit(f"⏰ **توقيت النشر:**\n\nالحالي: `{current}`\n\nده وقت بدء النشر اول مرة", buttons=btns)
+
+    @bot.on(events.CallbackQuery(pattern=b"sched_"))
+    async def set_schedule(event):
+        data = event.data.decode()
+        now = datetime.datetime.now()
+
+        if data == "sched_now":
+            DB["scheduled_time"] = None
+            await event.answer("⚡ هيتنشر فوري", alert=True)
+        elif data == "sched_1h":
+            time = now + datetime.timedelta(hours=1)
+            DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
+            await event.answer(f"⏰ هيتنشر الساعة {time.strftime('%H:%M')}", alert=True)
+        elif data == "sched_3h":
+            time = now + datetime.timedelta(hours=3)
+            DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
+            await event.answer(f"⏰ هيتنشر الساعة {time.strftime('%H:%M')}", alert=True)
+        elif data == "sched_10pm":
+            time = now.replace(hour=22, minute=0, second=0)
+            if time < now: time += datetime.timedelta(days=1)
+            DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
+            await event.answer("🌙 هيتنشر الساعة 10:00 بليل", alert=True)
+        elif data == "sched_9am":
+            time = now.replace(hour=9, minute=0, second=0)
+            if time < now: time += datetime.timedelta(days=1)
+            DB["scheduled_time"] = time.strftime("%Y-%m-%d %H:%M")
+            await event.answer("🌅 هيتنشر الساعة 9:00 الصبح", alert=True)
+        elif data == "sched_custom":
+            await event.edit("✏️ ابعت الوقت:\n\nصيغة: `YYYY-MM-DD HH:MM`\nمثال: `2026-05-03 14:30`", buttons=[[Button.inline("🔙", b"schedule_time")]])
+            bot.wait_schedule = True
+            return
+
+        save_db()
+        await start_panel(event)
+
+    @bot.on(events.CallbackQuery(data=b"set_wait"))
+    async def set_wait_menu(event):
+        btns = [
+            [Button.inline("⚡ 5-10 ثواني", b"wait_5_10")],
+            [Button.inline("🔵 10-20 ثانية", b"wait_10_20")],
+            [Button.inline("🟡 30-60 ثانية", b"wait_30_60")],
+            [Button.inline("🟢 60-120 ثانية", b"wait_60_120")],
+            [Button.inline("✏️ مخصص", b"wait_custom"), Button.inline("🔙", b"back")]
+        ]
+        current = f"{DB['wait_min']}-{DB['wait_max']} ثانية"
+        await event.edit(f"⏳ **وقت الانتظار بين كل جروب:**\n\nالحالي: `{current}`\n\n⚡ 5-10ث = سريع بس خطر\n🔵 10-20ث = متوازن\n🟡 30-60ث = آمن\n🟢 60-120ث = آمن جدا", buttons=btns)
+
+    @bot.on(events.CallbackQuery(pattern=b"wait_"))
+    async def set_wait(event):
+        data = event.data.decode()
+        if data == "wait_5_10":
+            DB["wait_min"], DB["wait_max"] = 5, 10
+        elif data == "wait_10_20":
+            DB["wait_min"], DB["wait_max"] = 10, 20
+        elif data == "wait_30_60":
+            DB["wait_min"], DB["wait_max"] = 30, 60
+        elif data == "wait_60_120":
+            DB["wait_min"], DB["wait_max"] = 60, 120
+        elif data == "wait_custom":
+            await event.edit("✏️ ابعت رقمين:\n\nمثال: `15 30`\nالاول الحد الادنى والثاني الاقصى بالثواني", buttons=[[Button.inline("🔙", b"set_wait")]])
+            bot.wait_delay = True
+            return
+
+        save_db()
+        await event.answer(f"✅ تم التعيين {DB['wait_min']}-{DB['wait_max']}ث", alert=True)
+        await start_panel(event)
+
+    @bot.on(events.CallbackQuery(data=b"toggle_stealth"))
+    async def toggle_stealth(event):
+        DB["stealth_mode"] = not DB["stealth_mode"]
+        save_db()
+        global userbot
+        if userbot and await userbot.is_user_authorized():
+            try:
+                if DB["stealth_mode"]:
+                    await userbot(UpdateStatusRequest(offline=True))
+                    await event.answer("👻 تم تفعيل وضع التخفي", alert=True)
+                else:
+                    await event.answer("👁️ تم ايقاف وضع التخفي", alert=True)
+            except: pass
+        await start_panel(event)
+
+    @bot.on(events.CallbackQuery(data=b"account"))
+    async def manage_account(event):
+        if DB["phone"]:
+            btns = [[Button.inline("🔄 تغيير الرقم", b"change_phone")], [Button.inline("🗑️ حذف الرقم", b"del_phone")], [Button.inline("🔙", b"back")]]
+            await event.edit(f"📱 الرقم الحالي:\n`{DB['phone']}`\n\nالجلسة: {DEVICE_MODEL}", buttons=btns)
+        else:
+            await event.edit("📱 ابعت رقمك بالكود الدولي\nمثال: `+201012345678`", buttons=[[Button.inline("🔙", b"back")]])
+            bot.wait_phone = True
+
+    @bot.on(events.CallbackQuery(data=b"set_welcome"))
+    async def set_welcome(event):
+        await event.edit(f"👋 الترحيب الحالي:\n\n{DB['welcome']}\n\nابعت الترحيب الجديد:\nتقدر تستخدم {{name}} و {{username}}\nوتنسق براحتك **عريض** *مائل*", buttons=[[Button.inline("🔙", b"back")]])
+        bot.wait_welcome = True
+
+    @bot.on(events.CallbackQuery(data=b"set_replies"))
+    async def set_replies(event):
+        replies_text = "\n".join([f"{i+1}. {r}" for i, r in enumerate(DB["replies"])])
+        btns = [[Button.inline("➕ اضافة رد", b"add_reply")], [Button.inline("🗑️ حذف آخر رد", b"del_reply"), Button.inline("🔙", b"back")]]
+        await event.edit(f"💬 الردود الحالية:\n\n{replies_text}", buttons=btns)
+
+    @bot.on(events.CallbackQuery(data=b"add_reply"))
+    async def add_reply(event):
+        await event.edit("ابعت الرد الجديد:\nنسقه من تيليجرام **عريض** *مائل* + ايموجي بريميوم", buttons=[[Button.inline("🔙", b"set_replies")]])
+        bot.wait_reply = True
+
+    @bot.on(events.CallbackQuery(data=b"del_reply"))
+    async def del_reply(event):
+        if DB["replies"]:
+            DB["replies"].pop()
+            save_db()
+            await event.answer("🗑️ تم حذف آخر رد", alert=True)
+        await set_replies(event)
+
+    @bot.on(events.NewMessage)
+    async def handle_input(event):
+        global userbot
+
+        if hasattr(bot, 'wait_phone') and bot.wait_phone and event.sender_id == DEV_ID:
+            bot.wait_phone = False
+            phone = event.text.strip()
+            if not phone.startswith('+'):
+                return await event.reply("❌ لازم يبدأ بـ + مثال: +2010")
+
+            msg = await event.reply("⏳ جاري ارسال الكود...")
+            DB["phone"] = phone
+            save_db()
+
+            userbot = TelegramClient(f'session_{phone}', API_ID, API_HASH, device_model=DEVICE_MODEL)
+            await userbot.connect()
+            try:
+                await userbot.send_code_request(phone)
+                await msg.edit("✅ اتبعت الكود على تيليجرام\nابعت الكود هنا:")
+                bot.wait_code = True
+            except Exception as e:
+                await msg.edit(f"❌ خطأ: {e}")
+                DB["phone"] = None
+                save_db()
+
+        elif hasattr(bot, 'wait_code') and bot.wait_code and event.sender_id == DEV_ID:
+            bot.wait_code = False
+            code = event.text.strip()
+            msg = await event.reply("⏳ جاري تسجيل الدخول...")
+            try:
+                await userbot.sign_in(DB["phone"], code)
+                await start_userbot()
+                await msg.edit(*prem(f"✅ تم التسجيل بنجاح\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
+                await start_panel(event)
+            except SessionPasswordNeededError:
+                await msg.edit("🔐 الحساب عليه تحقق بخطوتين\nابعت كلمة السر:")
+                bot.wait_2fa = True
+            except PhoneCodeInvalidError:
+                await msg.edit("❌ الكود غلط\nابعت /start وجرب تاني")
+            except Exception as e:
+                await msg.edit(f"❌ خطأ: {e}")
+
+        elif hasattr(bot, 'wait_2fa') and bot.wait_2fa and event.sender_id == DEV_ID:
+            bot.wait_2fa = False
+            password = event.text.strip()
+            msg = await event.reply("⏳ جاري التحقق...")
+            try:
+                await userbot.sign_in(password=password)
+                await start_userbot()
+                await msg.edit(*prem(f"✅ تم التسجيل\n\nالرقم: {DB['phone']}\nالجلسة: {DEVICE_MODEL} ", "diamond"))
+                await start_panel(event)
+            except Exception as e:
+                await msg.edit(f"❌ كلمة السر غلط: {e}")
+
+        elif hasattr(bot, 'wait_schedule') and bot.wait_schedule and event.sender_id == DEV_ID:
+            bot.wait_schedule = False
+            try:
+                dt = datetime.datetime.strptime(event.text.strip(), "%Y-%m-%d %H:%M")
+                if dt < datetime.datetime.now():
+                    return await event.reply("❌ التاريخ ده عدى خلاص")
+                DB["scheduled_time"] = event.text.strip()
+                save_db()
+                await event.reply(f"✅ هيتنشر في:\n`{DB['scheduled_time']}`", buttons=[[Button.inline("🔙", b"back")]])
+            except:
+                await event.reply("❌ صيغة غلط\nمثال: `2026-05-03 14:30`", buttons=[[Button.inline("🔙", b"schedule_time")]])
+
+        elif hasattr(bot, 'wait_delay') and bot.wait_delay and event.sender_id == DEV_ID:
+            bot.wait_delay = False
+            try:
+                parts = event.text.split()
+                min_delay = int(parts[0])
+                max_delay = int(parts[1])
+                if min_delay >= max_delay: raise ValueError
+                if min_delay < 3: raise ValueError("اقل حاجة 3 ثواني")
+
+                DB["wait_min"] = min_delay
+                DB["wait_max"] = max_delay
+                save_db()
+                await event.reply(f"✅ تم التعيين\n\nالحد الادنى: {min_delay}ث\nالحد الاقصى: {max_delay}ث", buttons=[[Button.inline("🔙", b"back")]])
+            except:
+                await event.reply("❌ صيغة غلط\nمثال صحيح: `15 30`", buttons=[[Button.inline("🔙", b"set_wait")]])
+
+        elif hasattr(bot, 'wait_welcome') and bot.wait_welcome and event.sender_id == DEV_ID:
+            bot.wait_welcome = False
+            DB["welcome"] = event.text
+            save_db()
+            await event.reply("✅ تم تعيين الترحيب الجديد", buttons=[[Button.inline("🔙", b"back")]])
+
+        elif hasattr(bot, 'wait_reply') and bot.wait_reply and event.sender_id == DEV_ID:
+            bot.wait_reply = False
+            DB["replies"].append(event.text)
+            save_db()
+            await event.reply(f"✅ تم اضافة الرد رقم {len(DB['replies'])}", buttons=[[Button.inline("🔙", b"set_replies")]])
+
+        elif hasattr(bot, 'wait_post') and bot.wait_post and event.sender_id == DEV_ID:
+            bot.wait_post = False
+            if not userbot or not await userbot.is_user_authorized():
+                return await event.reply("❌ ضيف رقم الاول")
+
+            if not DB["groups"]: return await event.reply("❌ ضيف جروبات الاول")
+
+            DB["temp_post"] = {
+                "text": event.message.text,
+                "entities": [e.to_dict() for e in event.message.entities or []],
+                "media": event.message.media.to_dict() if event.message.media else None
+            }
+            save_db()
+
+            wait_text = f"{DB['wait_min']}-{DB['wait_max']} ثانية"
+            sched_text = DB["scheduled_time"] or "فوري"
+            btns = [
+                [Button.inline("✅ نشر الآن", b"confirm_post"), Button.inline("👁️ معاينة", b"preview")],
+                [Button.inline("❌ الغاء", b"back")]
+            ]
+            await event.reply(f"📝 تم حفظ المنشور\n\nالجروبات: {len(DB['groups'])}\nالنشر: {sched_text}\nالانتظار: {wait_text}\nالتخفي: {'مفعل' if DB['stealth_mode'] else 'معطل'}", buttons=btns)
+
+    @bot.on(events.CallbackQuery)
+    async def callbacks(event):
+        data = event.data.decode()
+
+        if data == "change_phone":
+            DB["phone"] = None
+            save_db()
+            global userbot
+            if userbot: await userbot.disconnect()
+            userbot = None
+            await event.edit("📱 ابعت الرقم الجديد:\n`+201012345678`")
+            bot.wait_phone = True
+
+        elif data == "del_phone":
+            DB["phone"] = None
+            save_db()
+            if userbot: await userbot.disconnect()
+            userbot = None
+            await event.answer("🗑️ تم حذف الرقم", alert=True)
+            await start_panel(event)
+
+        elif data == "get_groups":
+            if not userbot or not await userbot.is_user_authorized():
+                return await event.answer("❌ ضيف رقم الاول", alert=True)
+
+            await event.answer("⏳ جاري الجلب...", alert=False)
+            dialogs = await userbot.get_dialogs()
+            bot.temp_groups = []
+            text = "**👥 جروباتك:**\n\n"
+
+            for d in dialogs:
+                if d.is_group:
+                    try:
+                        perms = await userbot.get_permissions(d.id, 'me')
+                        if perms.is_admin:
+                            bot.temp_groups.append({"id": d.id, "name": d.name})
+                            text += f"• {d.name}\n`{d.id}`\n\n"
+                    except: pass
+
+            btns = [[Button.inline(f"➕ اضافة الكل ({len(bot.temp_groups)})", b"add_all")], [Button.inline("🔙", b"back")]]
+            await event.edit(text[:4000], buttons=btns)
+
+        elif data == "add_all":
+            if hasattr(bot, 'temp_groups'):
+                added = 0
+                for g in bot.temp_groups:
+                    if g["id"] not in DB["groups"]:
+                        DB["groups"].append(g["id"])
+                        added += 1
+                save_db()
+                await event.answer(f"✅ تم اضافة {added} جروب", alert=True)
+                await start_panel(event)
+
+        elif data == "my_groups":
+            if not DB["groups"]: return await event.edit("❌ مفيش جروبات", buttons=[[Button.inline("🔙", b"back")]])
+            text = "**📝 جروبات النشر:**\n\n"
+            for gid in DB["groups"]:
+                try:
+                    chat = await userbot.get_entity(int(gid))
+                    text += f"• {chat.title}\n`{gid}`\n\n"
+                except: text += f"• محذوف `{gid}`\n\n"
+            await event.edit(text, buttons=[[Button.inline("🗑️ حذف الكل", b"clear_groups")], [Button.inline("🔙", b"back")]])
+
+        elif data == "clear_groups":
+            DB["groups"] = []
+            save_db()
+            await event.answer("🗑️ تم", alert=True)
+            await start_panel(event)
+
+        elif data == "send_post":
+            if not userbot or not await userbot.is_user_authorized():
+                return await event.answer("❌ ضيف رقم الاول", alert=True)
+            await event.edit("ابعت المنشور دلوقتي:\n\nنسق براحتك من تيليجرام\n**عريض** *مائل* `كود` __تحته خط__\n+ ايموجي بريميوم + صور + فيديو", buttons=[[Button.inline("🔙", b"back")]])
+            bot.wait_post = True
+
+        elif data == "preview":
+            if not DB.get("temp_post"):
+                return await event.answer("❌ مفيش منشور محفوظ", alert=True)
+
+            post = DB["temp_post"]
+            from telethon.tl.types import MessageEntity
+            entities = [MessageEntity.from_dict(e) for e in post["entities"]]
+
+            btns = [[Button.inline("✅ نشر الآن", b"confirm_post")], [Button.inline("🔙", b"back")]]
+            await event.edit("👁️ **معاينة المنشور:**\n\n" + post["text"], buttons=btns, formatting_entities=entities)
+
+        elif data == "confirm_post":
+            if not DB.get("temp_post"):
+                return await event.answer("❌ مفيش منشور", alert=True)
+
+            if DB["scheduled_time"]:
+                sched_time = datetime.datetime.strptime(DB["scheduled_time"], "%Y-%m-%d %H:%M")
+                now = datetime.datetime.now()
+                if sched_time > now:
+                    wait_seconds = (sched_time - now).total_seconds()
+                    await event.edit(f"⏰ تم الجدولة\n\nهيتنشر في: `{DB['scheduled_time']}`\nبعد: {int(wait_seconds/60)} دقيقة")
+                    await asyncio.sleep(wait_seconds)
+                    DB["scheduled_time"] = None
+                    save_db()
+
+            post = DB["temp_post"]
+            from telethon.tl.types import MessageEntity
+            entities = [MessageEntity.from_dict(e) for e in post["entities"]]
+            wait_min, wait_max = DB["wait_min"], DB["wait_max"]
+
+            msg = await event.edit(f"⏳ جاري النشر في {len(DB['groups'])} جروب...\nالانتظار: {wait_min}-{wait_max}ث")
+            sent, failed = 0, 0
+
+            for gid in DB["groups"]:
+                try:
+                    perms = await userbot.get_permissions(int(gid), 'me')
+                    if not perms.is_admin:
+                        failed += 1
+                        continue
+
+                    if DB["stealth_mode"]:
+                        await userbot.send_read_acknowledge(int(gid), max_id=0)
+
+                    if post["media"]:
+                        from telethon.tl.types import MessageMedia
+                        media = MessageMedia.from_dict(post["media"])
+                        await userbot.send_file(int(gid), media, caption=post["text"], formatting_entities=entities, silent=DB["stealth_mode"])
+                    else:
+                        await userbot.send_message(int(gid), post["text"], formatting_entities=entities, silent=DB["stealth_mode"])
+
+                    sent += 1
+                    wait_time = random.randint(wait_min, wait_max)
+                    await asyncio.sleep(wait_time)
+
+                except FloodWaitError as e:
+                    await msg.edit(f"⚠️ تيليجرام عامل حظر مؤقت {e.seconds} ثانية\nزود وقت الانتظار")
+                    return
+                except Exception as e:
+                    failed += 1
+                    print(f"Failed {gid}: {e}")
+
+            DB["temp_post"] = None
+            save_db()
+            txt, ents = prem(f"✅ تم\n\nمرسل: {sent}\nفشل: {failed}\nالانتظار: {wait_min}-{wait_max}ث ", "diamond")
+            await msg.edit(txt, formatting_entities=ents)
+
+        elif data == "back":
+            await start_panel(event)
+
+    @bot.on(events.NewMessage(pattern=r'/emoji (\w+)'))
+    async def add_emoji(event):
+        if event.sender_id!= DEV_ID: return
+        if not event.is_reply: return await event.reply("❌ رد على الايموجي البريميوم")
+        reply = await event.get_reply_message()
+        name = event.pattern_match.group(1)
+        for ent in reply.entities or []:
+            if isinstance(ent, MessageEntityCustomEmoji):
+                DB["emoji"][name] = ent.document_id
+                save_db()
+                txt, ents = prem(f"✅ اتحفظ {name} ", name)
+                return await event.reply(txt, formatting_entities=ents)
+
 async def main():
+    if not BOT_TOKEN:
+        print("❌ BOT_TOKEN مش موجود في Variables")
+        return
+
+    await setup_bot()
     await start_userbot()
     print(f"✅ Bot شغال | {DEVICE_MODEL} | انتظار: {DB['wait_min']}-{DB['wait_max']}ث | تخفي: {DB['stealth_mode']}")
     await bot.run_until_disconnected()
