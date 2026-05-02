@@ -15,7 +15,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 RAILWAY_TOKEN = os.getenv('RAILWAY_TOKEN')
 GITHUB_USERNAME = 'nashrmsnah-art'
-ADMIN_ID = 154919127
+DEVELOPER_ID = 154919127
 DB_FILE = 'database.json'
 BOT_PRICE = 10
 BOT_TEMPLATE_URL = 'https://github.com/nashrmsnah-art/factory_bot.py/blob/835c615afc374b1da645ddf3b747cc9f61da3033/bot-template'
@@ -158,7 +158,7 @@ async def newbot(event):
         "ارسل كود التفعيل اللي اشتريته من المطور\n\n"
         "⚠️ كل كود صالح لبوت واحد فقط مدى الحياة\n"
         "💰 السعر: 10$\n\n"
-        "لو معندكش كود تواصل مع @nashrmsnah"
+        "لو معندكش كود تواصل مع @Devazf"
     )
 
 @client.on(events.NewMessage)
