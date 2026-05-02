@@ -1,0 +1,6 @@
+azef_one.json
+session_*
+*.session
+bot_session.session
+__pycache__/
+.env
