@@ -1,6 +1,6 @@
 azef_one.json
 session_*
 *.session
-bot_session.session
+users.json
 __pycache__/
 .env
