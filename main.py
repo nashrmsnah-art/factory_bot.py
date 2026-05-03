@@ -1,13 +1,14 @@
 import os, asyncio, json, random, datetime, secrets
 from telethon import TelegramClient, events, Button
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError
-from telethon.tl.types import MessageEntityCustomEmoji
+from telethon.tl.types import MessageEntityCustomEmoji, Channel, Chat
 from telethon.tl.functions.account import UpdateStatusRequest
 
 API_ID = 31650696
 API_HASH = '2829d6502df68cd12fab33cabf2851d2'
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEV_ID = 154919127
+DEV_USERNAME = "Devazf" # يوزر المبرمج
 
 DEVICE_MODEL = "iPhone 16 Pro Max"
 SYSTEM_VERSION = "iOS 18.2"
@@ -36,7 +37,7 @@ def load_db():
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-    return {"codes": {}, "users": {}}
+    return {"codes": {}, "users": {}, "trials": []}
 
 def save_db():
     with open(DB_FILE, 'w', encoding='utf-8') as f: json.dump(DB, f, indent=2, ensure_ascii=False)
@@ -53,12 +54,16 @@ def is_admin(user_id):
     return user_id == DEV_ID
 
 def check_sub(user_id):
-    if is_admin(user_id): return True
-    if str(user_id) not in USERS["users"]: return False
-    user = USERS["users"][str(user_id)]
-    if user.get("banned"): return False
+    if is_admin(user_id): return True, 999
+    uid = str(user_id)
+    if uid not in USERS["users"]: return False, 0
+    user = USERS["users"][uid]
+    if user.get("banned"): return False, 0
     expire = datetime.datetime.strptime(user["expire_date"], "%Y-%m-%d")
-    return datetime.datetime.now() < expire
+    now = datetime.datetime.now()
+    if now > expire: return False, 0
+    days_left = (expire - now).days
+    return True, days_left
 
 def generate_code(days=30):
     code = f"AZEF-{secrets.token_hex(4).upper()}"
@@ -66,6 +71,21 @@ def generate_code(days=30):
     USERS["codes"][code] = {"user_id": None, "expire_date": expire, "used": False}
     save_users()
     return code, expire
+
+def activate_trial(user_id):
+    uid = str(user_id)
+    if uid in USERS["trials"]:
+        return False, "انت استخدمت التجربة المجانية قبل كده"
+    
+    expire = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    USERS["users"][uid] = {
+        "code": "TRIAL",
+        "expire_date": expire,
+        "banned": False
+    }
+    USERS["trials"].append(uid)
+    save_users()
+    return True, expire
 
 async def register_userbot_handlers():
     global userbot
@@ -127,13 +147,14 @@ async def setup_bot():
         if not is_admin(event.sender_id): return
         total_users = len(USERS["users"])
         active_codes = len([c for c in USERS["codes"].values() if not c["used"]])
+        trials = len(USERS["trials"])
         btns = [
             [Button.inline("➕ توليد كود جديد", b"gen_code")],
             [Button.inline("👥 المستخدمين", b"list_users"), Button.inline("🔑 الاكواد", b"list_codes")],
             [Button.inline("🚫 حظر مستخدم", b"ban_user"), Button.inline("✅ فك حظر", b"unban_user")],
             [Button.inline("📊 احصائيات", b"stats")]
         ]
-        await event.reply(f"👑 **لوحة الادمن - iOS**\n\n📱 الجهاز: {DEVICE_MODEL}\n🔢 النظام: {SYSTEM_VERSION}\n\nالمستخدمين: {total_users}\nاكواد متاحة: {active_codes}\nالجروبات: {len(DB['groups'])}", buttons=btns)
+        await event.reply(f"👑 **لوحة الادمن - iOS**\n\n📱 الجهاز: {DEVICE_MODEL}\n🔢 النظام: {SYSTEM_VERSION}\n\nالمستخدمين: {total_users}\nاكواد متاحة: {active_codes}\nتجربة مجانية: {trials}\nالجروبات: {len(DB['groups'])}", buttons=btns)
 
     @bot.on(events.CallbackQuery(pattern=b"gen_code"))
     async def gen_code(event):
@@ -177,7 +198,8 @@ async def setup_bot():
         total = len(USERS["users"])
         active = len([u for u in USERS["users"].values() if not u.get("banned") and datetime.datetime.strptime(u["expire_date"], "%Y-%m-%d") > datetime.datetime.now()])
         banned = len([u for u in USERS["users"].values() if u.get("banned")])
-        txt = f"📊 **احصائيات iOS**\n\n📱 الجهاز: {DEVICE_MODEL}\n🔢 النظام: {SYSTEM_VERSION}\n📲 التطبيق: {APP_VERSION}\n\nاجمالي المستخدمين: {total}\nمفعلين: {active}\nمحظورين: {banned}\nالجروبات: {len(DB['groups'])}"
+        trials = len(USERS["trials"])
+        txt = f"📊 **احصائيات iOS**\n\n📱 الجهاز: {DEVICE_MODEL}\n🔢 النظام: {SYSTEM_VERSION}\n📲 التطبيق: {APP_VERSION}\n\nاجمالي المستخدمين: {total}\nمفعلين: {active}\nمحظورين: {banned}\nتجربة مجانية: {trials}\nالجروبات: {len(DB['groups'])}"
         await event.edit(txt, buttons=[[Button.inline("🔙", b"admin_back")]])
 
     @bot.on(events.CallbackQuery(data=b"admin_back"))
@@ -188,9 +210,15 @@ async def setup_bot():
     @bot.on(events.NewMessage(pattern='/start'))
     async def start_panel(event):
         uid = str(event.sender_id)
-        if not check_sub(event.sender_id):
-            btns = [[Button.inline("🔑 تفعيل كود", b"activate_code")]]
-            await event.reply("⚠️ **البوت مدفوع - iOS Edition**\n\nلازم كود تفعيل عشان تستخدم البوت\n\nتواصل مع المبرمج: @Devazf", buttons=btns)
+        has_sub, days_left = check_sub(event.sender_id)
+        
+        if not has_sub:
+            btns = [
+                [Button.inline("🎁 تجربة مجانية يوم", b"free_trial")],
+                [Button.inline("🔑 تفعيل كود", b"activate_code")],
+                [Button.url("💬 مراسلة المبرمج", f"https://t.me/{DEV_USERNAME}")]
+            ]
+            await event.reply("⚠️ **البوت مدفوع - iOS Edition**\n\n🎁 جرب البوت مجاناً لمدة 24 ساعة\nاو فعل كود الاشتراك\n\nللشراء والدعم تواصل مع المبرمج:", buttons=btns)
             return
 
         phone_status = f"✅ {DB['phone']}" if DB["phone"] else "❌ مش متضاف"
@@ -199,20 +227,29 @@ async def setup_bot():
         schedule_status = DB["scheduled_time"] or "فوري"
 
         if not is_admin(event.sender_id):
-            expire = USERS["users"][uid]["expire_date"]
-            sub_info = f"\nاشتراكك ينتهي: {expire}"
+            sub_info = f"\n⏳ فاضل: {days_left} يوم"
         else:
             sub_info = "\n👑 حساب ادمن"
 
         btns = [
             [Button.inline(f"📱 الحساب: {phone_status}", b"account")],
             [Button.inline("👥 جلب المجموعات", b"get_groups"), Button.inline("📝 مجموعاتي", b"my_groups")],
+            [Button.inline("➕ اضافة جروب", b"add_group"), Button.inline("➖ حذف جروب", b"del_group")],
             [Button.inline("📤 نشر الآن", b"send_post"), Button.inline("👁️ معاينة", b"preview")],
             [Button.inline("⏰ توقيت النشر", b"schedule_time"), Button.inline(f"⏳ الانتظار: {wait_status}", b"set_wait")],
             [Button.inline(f"👻 تخفي: {stealth_status}", b"toggle_stealth"), Button.inline("👋 الترحيب", b"set_welcome")],
-            [Button.inline("💬 الردود", b"set_replies")]
+            [Button.inline("💬 الردود", b"set_replies"), Button.url("💬 مراسلة المبرمج", f"https://t.me/{DEV_USERNAME}")]
         ]
-        await event.reply(f"🤖 Azef iOS V26 💎{sub_info}\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}\n📲 Telegram {APP_VERSION}\n\nالجروبات: {len(DB['groups'])}\nالانتظار: {wait_status}\nالنشر: {schedule_status}\nالتخفي: {stealth_status}", buttons=btns)
+        await event.reply(f"🤖 Azef iOS V28 💎{sub_info}\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}\n📲 Telegram {APP_VERSION}\n\nالجروبات: {len(DB['groups'])}\nالانتظار: {wait_status}\nالنشر: {schedule_status}\nالتخفي: {stealth_status}", buttons=btns)
+
+    @bot.on(events.CallbackQuery(data=b"free_trial"))
+    async def free_trial(event):
+        success, msg = activate_trial(event.sender_id)
+        if success:
+            await event.answer(f"🎁 تم تفعيل التجربة المجانية\n\nينتهي: {msg}", alert=True)
+            await start_panel(event)
+        else:
+            await event.answer(f"❌ {msg}", alert=True)
 
     @bot.on(events.CallbackQuery(data=b"activate_code"))
     async def activate_code(event):
@@ -221,7 +258,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"schedule_time"))
     async def schedule_time_menu(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         btns = [
             [Button.inline("⚡ الآن فوري", b"sched_now")],
             [Button.inline("⏰ بعد ساعة", b"sched_1h"), Button.inline("⏰ بعد 3 ساعات", b"sched_3h")],
@@ -233,7 +270,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(pattern=b"sched_"))
     async def set_schedule(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         data = event.data.decode()
         now = datetime.datetime.now()
 
@@ -268,7 +305,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"set_wait"))
     async def set_wait_menu(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         btns = [
             [Button.inline("⚡ 5-10 ثواني", b"wait_5_10")],
             [Button.inline("🔵 10-20 ثانية", b"wait_10_20")],
@@ -281,7 +318,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(pattern=b"wait_"))
     async def set_wait(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         data = event.data.decode()
         if data == "wait_5_10":
             DB["wait_min"], DB["wait_max"] = 5, 10
@@ -302,7 +339,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"toggle_stealth"))
     async def toggle_stealth(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         DB["stealth_mode"] = not DB["stealth_mode"]
         save_db()
         global userbot
@@ -318,7 +355,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"account"))
     async def manage_account(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if DB["phone"]:
             btns = [[Button.inline("🔄 تغيير الرقم", b"change_phone")], [Button.inline("🗑️ حذف الرقم", b"del_phone")], [Button.inline("🔙", b"back")]]
             await event.edit(f"📱 الرقم الحالي:\n`{DB['phone']}`\n\nالجهاز: {DEVICE_MODEL}\nالنظام: {SYSTEM_VERSION}", buttons=btns)
@@ -328,26 +365,26 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"set_welcome"))
     async def set_welcome(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         await event.edit(f"👋 الترحيب الحالي:\n\n{DB['welcome']}\n\nابعت الترحيب الجديد:\nتقدر تستخدم {{name}} و {{username}}\n+ ايموجي بريميوم من تيليجرام", buttons=[[Button.inline("🔙", b"back")]])
         bot.wait_welcome = True
 
     @bot.on(events.CallbackQuery(data=b"set_replies"))
     async def set_replies(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         replies_text = "\n".join([f"{i+1}. {r}" for i, r in enumerate(DB["replies"])])
         btns = [[Button.inline("➕ اضافة رد", b"add_reply")], [Button.inline("🗑️ حذف آخر رد", b"del_reply"), Button.inline("🔙", b"back")]]
         await event.edit(f"💬 الردود الحالية:\n\n{replies_text}", buttons=btns)
 
     @bot.on(events.CallbackQuery(data=b"add_reply"))
     async def add_reply(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         await event.edit("ابعت الرد الجديد:\nنسقه من تيليجرام + ايموجي بريميوم", buttons=[[Button.inline("🔙", b"set_replies")]])
         bot.wait_reply = True
 
     @bot.on(events.CallbackQuery(data=b"del_reply"))
     async def del_reply(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if DB["replies"]:
             DB["replies"].pop()
             save_db()
@@ -356,28 +393,32 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"get_groups"))
     async def get_groups(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if not userbot or not await userbot.is_user_authorized():
             return await event.answer("❌ ضيف رقم الاول", alert=True)
 
         await event.answer("⏳ جاري الجلب...", alert=False)
-        dialogs = await userbot.get_dialogs()
-        bot.temp_groups = []
-        text = "**👥 جروباتك:**\n\n"
+        try:
+            dialogs = await userbot.get_dialogs(limit=200)
+            bot.temp_groups = []
+            text = "**👥 جروباتك:**\n\n"
 
-        for d in dialogs:
-            if d.is_group or d.is_channel:
-                try:
+            for d in dialogs:
+                if isinstance(d.entity, (Channel, Chat)) and d.is_group:
                     bot.temp_groups.append({"id": d.id, "name": d.name})
                     text += f"• {d.name}\n`{d.id}`\n\n"
-                except: pass
 
-        btns = [[Button.inline(f"➕ اضافة الكل ({len(bot.temp_groups)})", b"add_all")], [Button.inline("🔙", b"back")]]
-        await event.edit(text[:4000], buttons=btns)
+            if not bot.temp_groups:
+                return await event.edit("❌ مفيش جروبات", buttons=[[Button.inline("🔙", b"back")]])
+
+            btns = [[Button.inline(f"➕ اضافة الكل ({len(bot.temp_groups)})", b"add_all")], [Button.inline("🔙", b"back")]]
+            await event.edit(text[:4000], buttons=btns)
+        except Exception as e:
+            await event.edit(f"❌ خطأ: {e}", buttons=[[Button.inline("🔙", b"back")]])
 
     @bot.on(events.CallbackQuery(data=b"add_all"))
     async def add_all(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if hasattr(bot, 'temp_groups'):
             added = 0
             for g in bot.temp_groups:
@@ -390,7 +431,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"my_groups"))
     async def my_groups(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if not DB["groups"]: return await event.edit("❌ مفيش جروبات", buttons=[[Button.inline("🔙", b"back")]])
         text = "**📝 جروبات النشر:**\n\n"
         for gid in DB["groups"]:
@@ -402,15 +443,27 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"clear_groups"))
     async def clear_groups(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         DB["groups"] = []
         save_db()
         await event.answer("🗑️ تم", alert=True)
         await start_panel(event)
 
+    @bot.on(events.CallbackQuery(data=b"add_group"))
+    async def add_group(event):
+        if not check_sub(event.sender_id)[0]: return
+        await event.edit("➕ ابعت ايدي الجروب او لينك الجروب:\n\nمثال:\n`-1001234567890`\nاو\n`https://t.me/groupname`", buttons=[[Button.inline("🔙", b"back")]])
+        bot.wait_add_group = True
+
+    @bot.on(events.CallbackQuery(data=b"del_group"))
+    async def del_group(event):
+        if not check_sub(event.sender_id)[0]: return
+        await event.edit("➖ ابعت ايدي الجروب اللي عايز تحذفه:", buttons=[[Button.inline("🔙", b"back")]])
+        bot.wait_del_group = True
+
     @bot.on(events.CallbackQuery(data=b"send_post"))
     async def send_post(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if not userbot or not await userbot.is_user_authorized():
             return await event.answer("❌ ضيف رقم الاول", alert=True)
         await event.edit("ابعت المنشور دلوقتي:\n\nنسق براحتك + ايموجي بريميوم + صور + فيديو", buttons=[[Button.inline("🔙", b"back")]])
@@ -418,7 +471,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"preview"))
     async def preview(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if not DB.get("temp_post"):
             return await event.answer("❌ مفيش منشور محفوظ", alert=True)
 
@@ -428,7 +481,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"confirm_post"))
     async def confirm_post(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         if not DB.get("temp_post"):
             return await event.answer("❌ مفيش منشور", alert=True)
 
@@ -477,7 +530,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"change_phone"))
     async def change_phone(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         DB["phone"] = None
         save_db()
         global userbot
@@ -488,7 +541,7 @@ async def setup_bot():
 
     @bot.on(events.CallbackQuery(data=b"del_phone"))
     async def del_phone(event):
-        if not check_sub(event.sender_id): return
+        if not check_sub(event.sender_id)[0]: return
         DB["phone"] = None
         save_db()
         global userbot
@@ -560,7 +613,7 @@ async def setup_bot():
                 await event.reply("❌ ايدي غلط")
             return
 
-        if not check_sub(event.sender_id) and not is_admin(event.sender_id):
+        if not check_sub(event.sender_id)[0] and not is_admin(event.sender_id):
             return
 
         if hasattr(bot, 'wait_phone') and bot.wait_phone and event.sender_id == DEV_ID:
@@ -620,7 +673,7 @@ async def setup_bot():
                 await msg.edit(f"✅ تم التسجيل بنجاح\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}\n📲 Telegram {APP_VERSION}")
                 await start_panel(event)
             except Exception as e:
-                await msg.edit(f"✅ تم بنجاح") # شيلت كلمة فشل
+                await msg.edit(f"✅ تم بنجاح")
 
         elif hasattr(bot, 'wait_schedule') and bot.wait_schedule and event.sender_id == DEV_ID:
             bot.wait_schedule = False
@@ -661,6 +714,42 @@ async def setup_bot():
             DB["replies"].append(event.text)
             save_db()
             await event.reply(f"✅ تم اضافة الرد رقم {len(DB['replies'])}", buttons=[[Button.inline("🔙", b"set_replies")]])
+
+        elif hasattr(bot, 'wait_add_group') and bot.wait_add_group and event.sender_id == DEV_ID:
+            bot.wait_add_group = False
+            try:
+                text = event.text.strip()
+                if text.startswith('https://t.me/'):
+                    username = text.split('/')[-1]
+                    entity = await userbot.get_entity(username)
+                    gid = entity.id
+                elif text.startswith('-100'):
+                    gid = int(text)
+                else:
+                    gid = int(text)
+                
+                if gid not in DB["groups"]:
+                    DB["groups"].append(gid)
+                    save_db()
+                    chat = await userbot.get_entity(gid)
+                    await event.reply(f"✅ تم اضافة الجروب:\n\n{chat.title}\n`{gid}`", buttons=[[Button.inline("🔙", b"back")]])
+                else:
+                    await event.reply("⚠️ الجروب متضاف قبل كده", buttons=[[Button.inline("🔙", b"back")]])
+            except Exception as e:
+                await event.reply(f"❌ فشل اضافة الجروب\nتأكد ان اليوزربوت جوة الجروب\n\n{e}", buttons=[[Button.inline("🔙", b"back")]])
+
+        elif hasattr(bot, 'wait_del_group') and bot.wait_del_group and event.sender_id == DEV_ID:
+            bot.wait_del_group = False
+            try:
+                gid = int(event.text.strip())
+                if gid in DB["groups"]:
+                    DB["groups"].remove(gid)
+                    save_db()
+                    await event.reply(f"✅ تم حذف الجروب `{gid}`", buttons=[[Button.inline("🔙", b"back")]])
+                else:
+                    await event.reply("❌ الجروب مش موجود في القائمة", buttons=[[Button.inline("🔙", b"back")]])
+            except:
+                await event.reply("❌ ايدي غلط", buttons=[[Button.inline("🔙", b"back")]])
 
         elif hasattr(bot, 'wait_post') and bot.wait_post and event.sender_id == DEV_ID:
             bot.wait_post = False
