@@ -18,21 +18,19 @@ SYSTEM_LANG_CODE = "ar-AE"
 
 DB_FILE = "azef_one.json"
 USERS_FILE = "users.json"
-ACCOUNTS_FILE = "accounts.json"
 
 def load_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, 'r', encoding='utf-8') as f: return json.load(f)
     return {
-        "accounts": {}, # {1: {phone, groups, welcome, replies, active}, 2: {...}}
+        "accounts": {},
         "current_account": 1,
         "wait_seconds": 5,
-        "speed_level": "متوسط", # سريع/متوسط/بطيء
+        "speed_level": "متوسط",
         "stealth_mode": True,
         "auto_reply": True,
         "temp_post_1": None,
         "temp_post_2": None,
-        "multi_messages": [], # للرسايل المختلفة
         "stats": {"posts": 0, "messages": 0, "groups_count": {}},
         "logs": []
     }
@@ -78,7 +76,9 @@ def get_speed_seconds():
 
 DB = load_db()
 USERS = load_users()
-userbots = {} # {acc_id: client}
+userbots = {}
+publishing_tasks = {}
+stop_flags = {}
 bot = None
 
 def is_admin(user_id):
@@ -180,7 +180,7 @@ async def setup_bot():
             [Button.inline("🚫 حظر", b"ban_user"), Button.inline("✅ فك حظر", b"unban_user")],
             [Button.inline("💾 نسخ احتياطي", b"backup"), Button.inline("📥 استيراد", b"restore")]
         ]
-        await event.reply(f"👑 **لوحة الادمن V30**\n\n📱 {DEVICE_MODEL}\n\nالمستخدمين: {total_users}\nاكواد متاحة: {active_codes}\nتجربة: {trials}\nحسابات نشطة: {active_accounts}/5\nالمنشورات: {DB['stats']['posts']}", buttons=btns)
+        await event.reply(f"👑 **لوحة الادمن V30.1**\n\n📱 {DEVICE_MODEL}\n\nالمستخدمين: {total_users}\nاكواد متاحة: {active_codes}\nتجربة: {trials}\nحسابات نشطة: {active_accounts}/5\nالمنشورات: {DB['stats']['posts']}", buttons=btns)
 
     @bot.on(events.CallbackQuery(pattern=b"gen_code"))
     async def gen_code(event):
@@ -256,7 +256,7 @@ async def setup_bot():
                 [Button.inline("🔑 تفعيل كود", b"activate_code")],
                 [Button.url("💬 مراسلة المبرمج", f"https://t.me/{DEV_USERNAME}")]
             ]
-            await event.reply("⚠️ **Azef Pro V30**\n\n🎁 جرب البوت مجاناً لمدة 24 ساعة\n🔑 او فعل كود الاشتراك\n\nللشراء والدعم:", buttons=btns)
+            await event.reply("⚠️ **Azef Pro V30.1**\n\n🎁 جرب البوت مجاناً لمدة 24 ساعة\n🔑 او فعل كود الاشتراك\n\nللشراء والدعم:", buttons=btns)
             return
 
         acc = get_current_account()
@@ -277,14 +277,13 @@ async def setup_bot():
             [Button.inline(f"👤 حساب {DB['current_account']}/5", b"switch_account"), Button.inline(f"📊 {DB['stats']['posts']} منشور", b"show_stats")],
             [Button.inline(f"📱 {phone_status}", b"account_menu"), Button.inline("📝 السجلات", b"show_logs")],
             [Button.inline("👥 الجروبات", b"groups_menu"), Button.inline("💬 الردود", b"replies_menu")],
-            [Button.inline("📤 رسالة 1", b"send_post_1"), Button.inline("📤 رسالة 2", b"send_post_2")],
-            [Button.inline("📨 رسايل متعددة", b"multi_messages"), Button.inline("👁️ معاينة", b"preview_menu")],
+            [Button.inline("▶️ نشر رسالة 1", b"send_post_1"), Button.inline("▶️ نشر رسالة 2", b"send_post_2")],
+            [Button.inline("👁️ معاينة الرسائل", b"preview_menu"), Button.inline("👋 الترحيب", b"set_welcome")],
             [Button.inline(f"⏳ انتظار: {wait_status}", b"set_wait"), Button.inline(f"🚀 سرعة: {speed_status}", b"set_speed")],
             [Button.inline(f"👻 تخفي: {stealth_status}", b"toggle_stealth"), Button.inline(f"🔔 رد تلقائي: {auto_status}", b"toggle_auto")],
-            [Button.inline("👋 الترحيب", b"set_welcome"), Button.inline("⚙️ الاعدادات", b"settings")],
-            [Button.url("💬 الدعم", f"https://t.me/{DEV_USERNAME}")]
+            [Button.inline("⚙️ الاعدادات", b"settings"), Button.url("💬 الدعم", f"https://t.me/{DEV_USERNAME}")]
         ]
-        await event.reply(f"🤖 **Azef Pro V30** {sub_info}\n\n📱 {DEVICE_MODEL}\n\nحسابات نشطة: {accounts_active}/5\nالجروبات: {active_count}\nالانتظار: {wait_status} | السرعة: {speed_status}\nالتخفي: {stealth_status}", buttons=btns)
+        await event.reply(f"🤖 **Azef Pro V30.1** {sub_info}\n\n📱 {DEVICE_MODEL}\n\nحسابات نشطة: {accounts_active}/5\nالجروبات: {active_count}\nالانتظار: {wait_status} | السرعة: {speed_status}", buttons=btns)
 
     @bot.on(events.CallbackQuery(data=b"switch_account"))
     async def switch_account(event):
@@ -405,12 +404,6 @@ async def setup_bot():
         await event.edit("📝 ابعت الرسالة رقم 2:\n\nنص + ايموجي بريميوم + صور + فيديو", buttons=[[Button.inline("🔙", b"back")]])
         bot.wait_post_2 = True
 
-    @bot.on(events.CallbackQuery(data=b"multi_messages"))
-    async def multi_messages(event):
-        if not check_sub(event.sender_id)[0]: return
-        await event.edit("📨 **رسايل متعددة**\n\nابعت كل رسالة في سطر منفصل\nمثال:\nرسالة 1\nرسالة 2\nرسالة 3\n\nالبوت هيوزع كل رسالة في جروب مختلف", buttons=[[Button.inline("🔙", b"back")]])
-        bot.wait_multi = True
-
     @bot.on(events.CallbackQuery(data=b"preview_menu"))
     async def preview_menu(event):
         if not check_sub(event.sender_id)[0]: return
@@ -427,7 +420,7 @@ async def setup_bot():
         if not DB.get("temp_post_1"):
             return await event.answer("❌ مفيش رسالة 1 محفوظة", alert=True)
         post = DB["temp_post_1"]
-        btns = [[Button.inline("✅ نشر الآن", b"confirm_post_1")], [Button.inline("🔙", b"preview_menu")]]
+        btns = [[Button.inline("▶️ نشر الآن", b"confirm_post_1")], [Button.inline("🔙", b"preview_menu")]]
         await event.edit("👁️ **معاينة رسالة 1:**\n\n" + post["text"], buttons=btns)
 
     @bot.on(events.CallbackQuery(data=b"preview_2"))
@@ -436,7 +429,7 @@ async def setup_bot():
         if not DB.get("temp_post_2"):
             return await event.answer("❌ مفيش رسالة 2 محفوظة", alert=True)
         post = DB["temp_post_2"]
-        btns = [[Button.inline("✅ نشر الآن", b"confirm_post_2")], [Button.inline("🔙", b"preview_menu")]]
+        btns = [[Button.inline("▶️ نشر الآن", b"confirm_post_2")], [Button.inline("🔙", b"preview_menu")]]
         await event.edit("👁️ **معاينة رسالة 2:**\n\n" + post["text"], buttons=btns)
 
     @bot.on(events.CallbackQuery(data=b"confirm_post_1"))
@@ -449,44 +442,77 @@ async def setup_bot():
         if not check_sub(event.sender_id)[0]: return
         await do_publish(event, DB["temp_post_2"], 2)
 
+    @bot.on(events.CallbackQuery(pattern=b"stop_pub_"))
+    async def stop_publish(event):
+        if not check_sub(event.sender_id)[0]: return
+        acc_id = int(event.data.decode().split("_")[-1])
+        stop_flags[acc_id] = True
+        await event.answer("⏹️ جاري الايقاف...", alert=True)
+
     async def do_publish(event, post, post_num):
         if not post:
             return await event.answer("❌ مفيش منشور", alert=True)
-        
+
         acc = get_current_account()
         acc_id = DB["current_account"]
         if acc_id not in userbots:
             return await event.answer("❌ شغل الحساب الاول", alert=True)
-        
+
+        if acc_id in publishing_tasks and not publishing_tasks[acc_id].done():
+            return await event.answer("⚠️ في نشر شغال حالياً", alert=True)
+
         client = userbots[acc_id]
-        wait_sec = DB["wait_seconds"] if not DB["speed_level"] else get_speed_seconds()
-        
-        msg = await event.edit(f"⏳ جاري النشر في {len(acc['groups'])} جروب...\nالانتظار: {wait_sec}ث")
-        sent, failed = 0, 0
+        wait_sec = get_speed_seconds() if DB["speed_level"] else DB["wait_seconds"]
+        stop_flags[acc_id] = False
 
-        for gid in acc["groups"]:
-            try:
-                await client(UpdateStatusRequest(offline=True))
-                if post["media"]:
-                    from telethon.tl.types import MessageMedia
-                    media = MessageMedia.from_dict(post["media"])
-                    await client.send_file(int(gid), media, caption=post["text"], silent=True)
-                else:
-                    await client.send_message(int(gid), post["text"], silent=True)
-                sent += 1
-                DB["stats"]["posts"] += 1
-                DB["stats"]["groups_count"][str(gid)] = DB["stats"]["groups_count"].get(str(gid), 0) + 1
-                await asyncio.sleep(wait_sec)
-            except FloodWaitError as e:
-                await msg.edit(f"⚠️ حظر مؤقت {e.seconds} ثانية")
-                return
-            except Exception as e:
-                failed += 1
-                print(f"Failed {gid}: {e}")
+        msg = await event.edit(
+            f"▶️ **جاري النشر...**\n\nالجروبات: {len(acc['groups'])}\nالانتظار: {wait_sec}ث\n\n⏹️ اضغط ايقاف عشان توقف",
+            buttons=[[Button.inline("⏹️ ايقاف النشر", f"stop_pub_{acc_id}".encode())]]
+        )
 
-        save_db()
-        add_log(f"نشر رسالة {post_num}", f"حساب{acc_id} | مرسل: {sent} | فشل: {failed}")
-        await msg.edit(f"✅ تم\n\nمرسل: {sent}\nفشل: {failed}\nالانتظار: {wait_sec}ث")
+        async def publish_task():
+            sent, failed = 0, 0
+            total = len(acc["groups"])
+
+            for idx, gid in enumerate(acc["groups"], 1):
+                if stop_flags.get(acc_id):
+                    await msg.edit(f"⏹️ **تم الايقاف**\n\nمرسل: {sent}/{total}\nفشل: {failed}", buttons=[[Button.inline("🔙", b"back")]])
+                    return
+
+                try:
+                    await client(UpdateStatusRequest(offline=True))
+                    if post["media"]:
+                        from telethon.tl.types import MessageMedia
+                        media = MessageMedia.from_dict(post["media"])
+                        await client.send_file(int(gid), media, caption=post["text"], silent=True)
+                    else:
+                        await client.send_message(int(gid), post["text"], silent=True)
+
+                    sent += 1
+                    DB["stats"]["posts"] += 1
+                    DB["stats"]["groups_count"][str(gid)] = DB["stats"]["groups_count"].get(str(gid), 0) + 1
+                    save_db()
+
+                    if idx % 3 == 0:
+                        await msg.edit(
+                            f"▶️ **جاري النشر...**\n\nمرسل: {sent}/{total}\nفشل: {failed}\nفاضل: {total - idx}\nالانتظار: {wait_sec}ث",
+                            buttons=[[Button.inline("⏹️ ايقاف النشر", f"stop_pub_{acc_id}".encode())]]
+                        )
+
+                    await asyncio.sleep(wait_sec)
+
+                except FloodWaitError as e:
+                    await msg.edit(f"⚠️ حظر مؤقت {e.seconds} ثانية\n\nمرسل: {sent}/{total}\nفشل: {failed}", buttons=[[Button.inline("🔙", b"back")]])
+                    return
+                except Exception as e:
+                    failed += 1
+                    print(f"Failed {gid}: {e}")
+
+            save_db()
+            add_log(f"نشر رسالة {post_num}", f"حساب{acc_id} | مرسل: {sent} | فشل: {failed}")
+            await msg.edit(f"✅ **تم الانتهاء**\n\nمرسل: {sent}/{total}\nفشل: {failed}\nالانتظار: {wait_sec}ث", buttons=[[Button.inline("🔙", b"back")]])
+
+        publishing_tasks[acc_id] = asyncio.create_task(publish_task())
 
     @bot.on(events.CallbackQuery(data=b"set_wait"))
     async def set_wait(event):
@@ -789,7 +815,7 @@ async def setup_bot():
             try:
                 await userbots[acc_id].sign_in(get_current_account()["phone"], code)
                 await start_userbot(acc_id)
-                await msg.edit(f"✅ تم التسجيل بنجاح\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}\n📲 Telegram {APP_VERSION}")
+                await msg.edit(f"✅ تم التسجيل بنجاح\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}")
                 await start_panel(event)
             except SessionPasswordNeededError:
                 await msg.edit("🔐 الحساب عليه تحقق بخطوتين\nابعت كلمة السر:")
@@ -808,7 +834,7 @@ async def setup_bot():
             try:
                 await userbots[acc_id].sign_in(password=password)
                 await start_userbot(acc_id)
-                await msg.edit(f"✅ تم التسجيل بنجاح\n\n📱 {DEVICE_MODEL}\n🔢 iOS {SYSTEM_VERSION}")
+                await msg.edit(f"✅ تم التسجيل بنجاح\n\n📱 {DEVICE_MODEL}")
                 await start_panel(event)
             except Exception as e:
                 await msg.edit(f"✅ تم بنجاح")
@@ -858,13 +884,6 @@ async def setup_bot():
             save_db()
             await event.reply("✅ تم حفظ الرسالة 2\n\nدوس معاينة عشان تشوفها وتنشرها", buttons=[[Button.inline("🔙", b"back")]])
 
-        elif hasattr(bot, 'wait_multi') and bot.wait_multi and event.sender_id == DEV_ID:
-            bot.wait_multi = False
-            messages = [m.strip() for m in event.text.split('\n') if m.strip()]
-            DB["multi_messages"] = messages
-            save_db()
-            await event.reply(f"✅ تم حفظ {len(messages)} رسالة\n\nكل رسالة هتتنشر في جروب مختلف", buttons=[[Button.inline("🚀 نشر متعدد", b"publish_multi")], [Button.inline("🔙", b"back")]])
-
         elif hasattr(bot, 'wait_add_group') and bot.wait_add_group and event.sender_id == DEV_ID:
             bot.wait_add_group = False
             try:
@@ -910,50 +929,15 @@ async def setup_bot():
             except:
                 await event.reply("❌ ايدي غلط", buttons=[[Button.inline("🔙", b"groups_menu")]])
 
-    @bot.on(events.CallbackQuery(data=b"publish_multi"))
-    async def publish_multi(event):
-        if not check_sub(event.sender_id)[0]: return
-        if not DB["multi_messages"]:
-            return await event.answer("❌ مفيش رسايل", alert=True)
-        
-        acc = get_current_account()
-        acc_id = DB["current_account"]
-        if acc_id not in userbots:
-            return await event.answer("❌ شغل الحساب الاول", alert=True)
-        
-        client = userbots[acc_id]
-        wait_sec = DB["wait_seconds"] if not DB["speed_level"] else get_speed_seconds()
-        
-        msg = await event.edit(f"⏳ جاري النشر المتعدد...\nالانتظار: {wait_sec}ث")
-        sent, failed = 0, 0
-        
-        for i, gid in enumerate(acc["groups"]):
-            if i >= len(DB["multi_messages"]): break
-            try:
-                await client(UpdateStatusRequest(offline=True))
-                await client.send_message(int(gid), DB["multi_messages"][i], silent=True)
-                sent += 1
-                DB["stats"]["posts"] += 1
-                DB["stats"]["groups_count"][str(gid)] = DB["stats"]["groups_count"].get(str(gid), 0) + 1
-                await asyncio.sleep(wait_sec)
-            except Exception as e:
-                failed += 1
-                print(f"Failed {gid}: {e}")
-        
-        save_db()
-        add_log(f"نشر متعدد حساب{acc_id}", f"مرسل: {sent} | فشل: {failed}")
-        await msg.edit(f"✅ تم النشر المتعدد\n\nمرسل: {sent}\nفشل: {failed}\nالانتظار: {wait_sec}ث")
-
 async def main():
     if not BOT_TOKEN:
         print("❌ BOT_TOKEN مش موجود في Variables")
         return
     await setup_bot()
-    # تشغيل كل الحسابات النشطة
     for acc_id, acc in DB["accounts"].items():
         if acc.get("phone"):
             await start_userbot(int(acc_id))
-    print(f"✅ Bot V30 Pro Plus شغال | {DEVICE_MODEL} | مخفي 👻")
+    print(f"✅ Bot V30.1 Pro Plus شغال | {DEVICE_MODEL} | مخفي 👻")
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
