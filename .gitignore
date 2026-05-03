@@ -1,7 +1,7 @@
 azef_one.json
+users.json
 session_*
 *.session
 ios_*
-users.json
 __pycache__/
 .env
