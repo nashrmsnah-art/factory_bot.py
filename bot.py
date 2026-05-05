@@ -11,7 +11,7 @@ from phonenumbers import geocoder
 API_ID = 31650696  # استبدله بـ API ID
 API_HASH = '2829d6502df68cd12fab33cabf2851d2'  # استبدله بـ API HASH
 BOT_TOKEN = '8717368656:AAHdK0iBCxMX8ThTC-GgDWDrK9jcO2AJeV0'  # استبدله بـ BOT TOKEN
-ADMIN_ID = 154919127  # استبدله بـ ID حسابك الشخصي
+OWNER_ID = 154919127  # استبدله بـ ID حسابك الشخصي
 
 bot = TelegramClient('admin_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
