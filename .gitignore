@@ -1,7 +1,0 @@
-azef_one.json
-users.json
-session_*
-*.session
-ios_*
-__pycache__/
-.env
