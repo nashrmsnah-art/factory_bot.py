@@ -8,8 +8,8 @@ from phonenumbers import geocoder
 # --- إعدادات أساسية ---
 API_ID = 31650696  
 API_HASH = '2829d6502df68cd12fab33cabf2851d2'  
-BOT_TOKEN = '8717368656:AAHdK0iBCxMX8ThTC-GgDWDrK9jcO2AJeV0'  
-OWNER_ID = 154919127  # أيدي المالك (أنت)
+BOT_TOKEN = '8650618464:AAFdn_TQUhzU8aMKHpxcHWaV9icW7XuNt2Q'  
+OWNER_ID = 8085768728  # أيدي المالك (أنت)
 DEVELOPER_USER = "devazf" # يوزر المطور بدون @
 
 bot = TelegramClient('admin_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
