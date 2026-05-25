@@ -6,6 +6,9 @@ API_ID = 37879014
 API_HASH = "db129fe3286650ad869b2891abd72df2"
 BOT_TOKEN = "8761534960:AAE79eePv-ySF2H_i_3Er6aDcRWN7opu8j8"
 ADMIN_IDS = [29449730] # حط أيديك هنا
+
+FACTORY_CHANNEL = "F2F2FFF" # بدون @
+FACTORY_CHANNEL_LINK = "https://t.me/F2F2FFF"
 BOT_FOLDER = "bots"
 
 # ===================== البداية =====================
@@ -29,6 +32,14 @@ def save_all():
 def is_expired(uid):
     return uid not in data or time.time() > data[uid]['expire_at']
 
+# ===================== فحص الاشتراك الإجباري =====================
+async def check_subscription(user_id):
+    try:
+        await bot.get_participants(FACTORY_CHANNEL, filter=user_id)
+        return True
+    except:
+        return False
+
 # ===================== تشغيل/إيقاف البوتات =====================
 async def start_bot(uid):
     if is_expired(uid):
@@ -44,10 +55,9 @@ async def start_bot(uid):
     if not os.path.exists(bot_path):
         shutil.copy(template_path, bot_path)
 
-    # تشغيل البوت
-    if os.name == 'nt': # ويندوز
+    if os.name == 'nt':
         proc = subprocess.Popen([sys.executable, bot_path, uid], creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-    else: # لينكس
+    else:
         proc = subprocess.Popen([sys.executable, bot_path, uid], start_new_session=True)
 
     processes[uid] = proc.pid
@@ -99,6 +109,17 @@ async def auto_start_bots():
 async def start(event):
     uid = str(event.sender_id)
     name = event.sender.first_name or "مستخدم"
+
+    # فحص الاشتراك الإجباري
+    if not await check_subscription(event.sender_id):
+        text = "**لازم تشترك في قناة المصنع الأول** 🔒\n\n"
+        text += "اشترك وبعدين اضغط تحقق عشان تقدر تستخدم المصنع"
+        buttons = [
+            [Button.url("📢 اشترك هنا", FACTORY_CHANNEL_LINK)],
+            [Button.inline("✅ تحققت", b"check_sub")]
+        ]
+        return await event.respond(text, buttons=buttons, parse_mode='md')
+
     is_admin = event.sender_id in ADMIN_IDS
     has_bot = uid in data and not is_expired(uid)
 
@@ -108,7 +129,7 @@ async def start(event):
     text += "────────────────────\n"
 
     if is_admin:
-        text += "**لوحة المبرمجr** 👑"
+        text += "**لوحة المطور** 👑"
         buttons = [
             [Button.inline("📊 البوتات الفعالة", b"dev_bots"),
              Button.inline("📈 الإحصائيات", b"dev_stats")],
@@ -119,10 +140,12 @@ async def start(event):
     elif has_bot:
         expire = time.strftime("%Y-%m-%d", time.localtime(data[uid]['expire_at']))
         status_emoji = "🟢" if data[uid]['status'] == 'active' else "🔴"
+        sup_price = data[uid].get('sup_price', 0)
 
         text += f"**حالتك:** {status_emoji} {data[uid]['status']}\n"
         text += f"**ينتهي:** `{expire}`\n"
-        text += f"**البوت:** @{data[uid]['username']}\n\n"
+        text += f"**البوت:** @{data[uid]['username']}\n"
+        text += f"**سعر البوت:** {sup_price} جنيه\n"
 
         buttons = [
             [Button.inline("🎛️ التحكم بالبوت", b"manage_bot"),
@@ -140,6 +163,14 @@ async def start(event):
         ]
 
     await event.respond(text, buttons=buttons, parse_mode='md', link_preview=False)
+
+@bot.on(events.CallbackQuery(data=b'check_sub'))
+async def check_sub(event):
+    if await check_subscription(event.sender_id):
+        await event.delete()
+        await start(event)
+    else:
+        await event.answer("❌ لسه مش مشترك في القناة", alert=True)
 
 # ===================== توليد الأكواد =====================
 @bot.on(events.CallbackQuery(data=b'gen_code'))
@@ -167,11 +198,10 @@ async def create_code(event):
 @bot.on(events.CallbackQuery(data=b'list_codes'))
 async def list_codes(event):
     if event.sender_id not in ADMIN_IDS: return
-    text = "**كل الأكواد:**\n\n"
-    for code, info in list(codes.items())[-20:]: # آخر 20 كود
+    text = "**آخر 20 كود:**\n\n"
+    for code, info in list(codes.items())[-20:]:
         status = "✅ مستخدم" if info['used'] else "🟢 متاح"
         text += f"`{code}`\n نوع: {info['type']} | {info['days']} يوم | {status}\n\n"
-
     await event.edit(text, buttons=[[Button.inline("🔙 رجوع", b"back")]], parse_mode='md')
 
 # ===================== إنشاء بوت جديد =====================
@@ -219,20 +249,28 @@ async def handle_steps(event):
 
     elif step == 'channel':
         channel = event.text.replace('@', '')
-        info = user_state[uid]
+        user_state[uid]['channel'] = channel
+        user_state[uid]['step'] = 'sup_price'
+        await event.respond("5️⃣ ابعت **سعر البوت** اللي هيتباع بيه للعملاء\nاكتب رقم فقط، مثال: 50")
 
-        # التحقق من الأدمن
+    elif step == 'sup_price':
+        if not event.text.isdigit():
+            return await event.respond("❌ اكتب رقم صحيح فقط")
+
+        sup_price = int(event.text)
+        info = user_state[uid]
+        channel = info['channel']
+
+        # التحقق من الأدمن في القناة
         try:
             client = TelegramClient(f'check_{uid}', API_ID, API_HASH).start(bot_token=info['token'])
             admins = await client.get_participants(channel, filter='admins')
             is_admin = any(getattr(admin, 'username', '') == info['username'] for admin in admins)
+            await client.disconnect()
 
             if not is_admin:
                 await event.respond("❌ البوت مش أدمن في القناة!\nضيفه كأدمن وجرب تاني")
-                await client.disconnect()
                 return
-
-            await client.disconnect()
         except Exception as e:
             await event.respond(f"❌ حصل خطأ في التحقق:\n`{e}`", parse_mode='md')
             return
@@ -246,6 +284,7 @@ async def handle_steps(event):
             'token': info['token'],
             'username': info['username'],
             'channel': channel,
+            'sup_price': sup_price,
             'code': info['code'],
             'expire_at': expire_at,
             'status': 'stopped',
@@ -254,7 +293,7 @@ async def handle_steps(event):
         codes[info['code']]['used'] = True
         save_all()
 
-        await event.respond("✅ تم التسجيل بنجاح!\nجاري تشغيل البوت...")
+        await event.respond(f"✅ تم التسجيل بنجاح!\n💰 سعر البوت: {sup_price} جنيه\nجاري تشغيل البوت...")
         await start_bot(uid)
         user_state.pop(uid)
 
@@ -266,12 +305,14 @@ async def manage_bot(event):
 
     status = data[uid]['status']
     expire = time.strftime("%Y-%m-%d %H:%M", time.localtime(data[uid]['expire_at']))
+    sup_price = data[uid].get('sup_price', 0)
 
     text = f"**التحكم بالبوت** 🎛️\n\n"
     text += f"**الحالة:** {'🟢 شغال' if status=='active' else '🔴 متوقف'}\n"
     text += f"**ينتهي:** `{expire}`\n"
     text += f"**البوت:** @{data[uid]['username']}\n"
     text += f"**القناة:** @{data[uid]['channel']}\n"
+    text += f"**سعر البوت:** {sup_price} جنيه\n"
 
     btn = []
     if status == 'active':
@@ -322,12 +363,9 @@ async def delete_bot(event):
 async def confirm_delete(event):
     uid = str(event.sender_id)
     await stop_bot(uid)
-
-    # حذف الملف
     bot_path = f"{BOT_FOLDER}/bot_{uid}.py"
     if os.path.exists(bot_path):
         os.remove(bot_path)
-
     data.pop(uid)
     save_all()
     await event.edit("🗑️ تم حذف البوت والملف نهائياً")
@@ -350,8 +388,9 @@ async def dev_bots(event):
         count += 1
         status = "🟢" if info['status']=='active' else "🔴"
         expire = time.strftime("%m-%d", time.localtime(info['expire_at']))
+        sup_price = info.get('sup_price', 0)
         text += f"{count}. {status} `{uid}`\n"
-        text += f" @{info['username']} | ينتهي: {expire}\n\n"
+        text += f" @{info['username']} | سعر: {sup_price} | ينتهي: {expire}\n\n"
 
     if count == 0:
         text = "مفيش عملاء لسه"
@@ -364,10 +403,6 @@ async def restart_all(event):
     await event.edit("⏳ جاري إعادة تشغيل كل البوتات...")
     await auto_start_bots()
     await event.edit("✅ تم إعادة تشغيل كل البوتات الفعالة")
-
-@bot.on(events.CallbackQuery(data=b'back'))
-async def back(event):
-    await start(event)
 
 @bot.on(events.CallbackQuery(data=b'pricing'))
 async def pricing(event):
@@ -394,15 +429,20 @@ async def help_btn(event):
     text = """
 **طريقة الاستخدام** ❓
 
-1. اشتري كود اشتراك من المطور
-2. اضغط إنشاء بوت وابعث الكود
-3. ابعت بيانات البوت: الأيدي، التوكن، اليوزر، القناة
-4. البوت هيشتغل أوتوماتيك
-5. تحكم فيه من زر التحكم
+1. اشترك في قناة المصنع أولاً
+2. اشتري كود اشتراك من المطور
+3. اضغط إنشاء بوت وابعث الكود
+4. ابعت بيانات البوت: الأيدي، التوكن، اليوزر، القناة، السعر
+5. البوت هيشتغل أوتوماتيك
+6. تحكم فيه من زر التحكم
 
 **ملاحظة:** لازم تضيف البوت أدمن في قناة الإجباري
 """
     await event.edit(text, buttons=[[Button.inline("🔙 رجوع", b"back")]], parse_mode='md')
+
+@bot.on(events.CallbackQuery(data=b'back'))
+async def back(event):
+    await start(event)
 
 # ===================== التشغيل =====================
 async def main():
