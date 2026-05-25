@@ -10,7 +10,6 @@ API_HASH = "db129fe3286650ad869b2891abd72df2"
 BOT_TOKEN = "8761534960:AAE79eePv-ySF2H_i_3Er6aDcRWN7opu8j8"
 FACTORY_CHANNEL = "F2F2FFF"
 ADMIN_ID = 29449730
-
 DATA_FILE = "bots_data.json"
 BOTS_FOLDER = "bots"
 TEMPLATES_FOLDER = "templates"
@@ -257,7 +256,7 @@ client = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 @client.on(events.NewMessage(pattern="/start"))
 async def start(event):
-    await event.reply("مرحباً! بوت التحميل شغال ✅")
+    await event.reply("مرحباً! بوت النشر شغال ✅")
 
 print("بوت التحميل شغال...")
 client.run_until_disconnected()
@@ -541,20 +540,10 @@ async def main():
     log("✅ Factory is ready")
     try:
         await bot.run_until_disconnected()
-    finally:
-        log("⏹️ Closing factory...")
-        # اقفل كل البوتات الفرعية
-        data = load_data()
-        for bot_id, info in data["bots"].items():
-            if info.get("running"):
-                await stop_bot_process(bot_id)
-        await bot.disconnect()
-        log("✅ Factory closed cleanly")
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        log("Factory stopped by user")
     except Exception as e:
-        log(f"Critical error: {e}")
+        log(f"Error: {e}")
+    finally:
+        log("⏹️ إغلاق المصنع...")
+        # اقفل البوت الرئيسي بس، متلمسش حاجة تانية
+        await bot.disconnect()
+        log("✅ تم الإغلاق")
