@@ -7,7 +7,7 @@ from telethon.errors import UserNotParticipantError
 # ==================== الإعدادات ====================
 API_ID = 37879014
 API_HASH = "db129fe3286650ad869b2891abd72df2"
-BOT_TOKEN = "8761534960:AAE79eePv-ySF2H_i_3Er6aDcRWN7opu8j8"
+BOT_TOKEN = "8761534960:AAGwU1F75e2RBoop4UbssAoa_zid6-fCtC4"
 FACTORY_CHANNEL = "F2F2FFF"
 ADMIN_ID = 29449730
 DATA_FILE = "bots_data.json"
