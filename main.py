@@ -1,4 +1,4 @@
-import json, os, subprocess, time, asyncio, random, shutil, sys
+import json, os, subprocess, time, asyncio, random, shutil, sys, re
 from telethon import TelegramClient, events, Button
 
 # ===================== الإعدادات =====================
