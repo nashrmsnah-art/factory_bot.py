@@ -539,7 +539,17 @@ async def main():
     log("🚀 Starting factory bot...")
     await auto_start_bots()
     log("✅ Factory is ready")
-    await bot.run_until_disconnected()
+    try:
+        await bot.run_until_disconnected()
+    finally:
+        log("⏹️ Closing factory...")
+        # اقفل كل البوتات الفرعية
+        data = load_data()
+        for bot_id, info in data["bots"].items():
+            if info.get("running"):
+                await stop_bot_process(bot_id)
+        await bot.disconnect()
+        log("✅ Factory closed cleanly")
 
 if __name__ == "__main__":
     try:
