@@ -360,8 +360,8 @@ async def start(event):
         # كل النص عريض من الأول للآخر
         MessageEntityBold(offset=0, length=219)
     ]
-        await event.reply(welcome_text, buttons=btns, parse_mode='html')
-        return
+            await event.reply(welcome_text, buttons=btns, parse_mode='html')
+            return
 
     # 3. لو مشترك/مطور - القائمة الرئيسية
     days = (datetime.fromisoformat(user['sub_end']) - datetime.now()).days if user.get('sub_end') else 9999
