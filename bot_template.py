@@ -1320,25 +1320,13 @@ async def start_auto_reply(uid):
     try:
         me = await client.get_me()
 
-        @client.on(events.NewMessage(incoming=True))
+        @client.on(events.NewMessage(incoming=True, func=lambda e: not e.is_private))
         async def handler(event):
             try:
-                if event.is_group and user['auto_reply_msg']:
-                    if event.message.mentioned or (event.is_reply and (await event.get_reply_message()).sender_id == me.id):
-                        sender_id = event.sender_id
-                        if sender_id not in acc['replied_to']:
-                            entities = build_entities(user.get('auto_reply_entities', []))
-                            await event.reply(user['auto_reply_msg'], formatting_entities=entities)
-                            acc['replied_to'].append(sender_id)
-                            save_db()
-
-                elif event.is_private and user['welcome_msg']:
-                    sender_id = event.sender_id
-                    if sender_id not in user['welcome_sent']:
-                        entities = build_entities(user.get('welcome_entities', []))
-                        await event.reply(user['welcome_msg'], formatting_entities=entities)
-                        user['welcome_sent'].append(sender_id)
-                        save_db()
+                if event.message.mentioned or (event.is_reply and (await event.get_reply_message()).sender_id == me.id):
+                    entities = build_entities(user.get('auto_reply_entities', []))
+                    await event.reply(user['auto_reply_msg'], formatting_entities=entities)
+                    await asyncio.sleep(3)
             except:
                 pass
 
