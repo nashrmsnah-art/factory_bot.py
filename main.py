@@ -318,10 +318,10 @@ async def start(event):
             await bot(GetParticipantRequest(channel, uid))
         except:
             btns = [
-                [Button.url(f"🔔 اشترك منا اولا", f"https://t.me/{channel}")],
+                [Button.url(f"🔔 اشترك منا أولا", f"https://t.me/{channel}")],
                 [Button.inline("✅ تحققت", b"check_sub")]
             ]
-            await event.reply("🔒 اشترك في القناة اولا", buttons=btns)
+            await event.reply("🔒 اشترك في القناة أولا", buttons=btns)
             return
 
     # 2. لو مش مشترك في البوت
@@ -336,32 +336,33 @@ async def start(event):
 
         welcome_text = """👋 أهلاً بيك في بوت النشر التلقائي
 
-🚀 نشر تلقائي في المجموعات آمن جدا
+🚀 نشر تلقائي في المجموعات آمن جداً
 
-🤖 رد تلقائي ذكي متخطي الباند نهائيا
+🤖 رد تلقائي ذكي متخطي الباند نهائياً
 
-🛡️ حماية متقدمة عالية جدا ضد التجميد والفلود
+🛡️ حماية متقدمة عالية جداً ضد التجميد والفلود
 
 📂 البوت باشتراك مدفوع
 ⚙️  الـشهر سـعر 2 دولار
-⚙️  الـسنه سـعر 5 دولار"""
+⚙️  الـسنة سـعر 5 دولار"""
 
-    entities = [
-        # 👋 ايموجي
-        MessageEntityCustomEmoji(offset=0, length=2, document_id=5798911787604648367),
-        # 🚀 ايموجي
-        MessageEntityCustomEmoji(offset=34, length=2, document_id=5798941981224737816),
-        # 🤖 ايموجي
-        MessageEntityCustomEmoji(offset=71, length=2, document_id=5796499583647359561),
-        # 🛡️ ايموجي
-        MessageEntityCustomEmoji(offset=109, length=2, document_id=5796526727840669257),
-        # 📂 ايموجي
-        MessageEntityCustomEmoji(offset=156, length=2, document_id=5798482080421649554),
-        # كل النص عريض من الأول للآخر
-        MessageEntityBold(offset=0, length=219)
-    ]
-            await event.reply(welcome_text, buttons=btns, parse_mode='html')
-            return
+        entities = [
+            # 👋 ايموجي
+            MessageEntityCustomEmoji(offset=0, length=2, document_id=5798911787604648367),
+            # 🚀 ايموجي  
+            MessageEntityCustomEmoji(offset=34, length=2, document_id=5798941981224737816),
+            # 🤖 ايموجي
+            MessageEntityCustomEmoji(offset=71, length=2, document_id=5796499583647359561),
+            # 🛡️ ايموجي
+            MessageEntityCustomEmoji(offset=109, length=2, document_id=5796526727840669257),
+            # 📂 ايموجي
+            MessageEntityCustomEmoji(offset=156, length=2, document_id=5798482080421649554),
+            # كل النص عريض من الأول للآخر
+            MessageEntityBold(offset=0, length=219)
+        ]
+        
+        await event.reply(welcome_text, buttons=btns, formatting_entities=entities)
+        return
 
     # 3. لو مشترك/مطور - القائمة الرئيسية
     days = (datetime.fromisoformat(user['sub_end']) - datetime.now()).days if user.get('sub_end') else 9999
