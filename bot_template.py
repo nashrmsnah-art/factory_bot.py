@@ -334,18 +334,32 @@ async def start(event):
             [Button.url("👨‍💻 المطور", DEVELOPER_LINK)]
         ]
 
-        welcome_text = """<b>👋 أهلاً بيك في بوت النشر التلقائي</b>
+        welcome_text = """👋 أهلاً بيك في بوت النشر التلقائي
 
-🚀 <b>نشر تلقائي في المجموعات آمن جدا</b>
+🚀 نشر تلقائي في المجموعات آمن جدا
 
-🤖 <b>رد تلقائي ذكي متخطي الباند نهائيا</b>
+🤖 رد تلقائي ذكي متخطي الباند نهائيا
 
-🛡️ <b>حماية متقدمة عالية جدا ضد التجميد والفلود</b>
+🛡️ حماية متقدمة عالية جدا ضد التجميد والفلود
 
-📂 <i>البوت باشتراك مدفوع</i>
-⚙️ <i> الـشهر سـعر 2 دولار</i>
-⚙️ <i> الـسنه سـعر 5 دولار</i>
-"""
+📂 البوت باشتراك مدفوع
+⚙️  الـشهر سـعر 2 دولار
+⚙️  الـسنه سـعر 5 دولار"""
+
+    entities = [
+        # 👋 ايموجي
+        MessageEntityCustomEmoji(offset=0, length=2, document_id=5798911787604648367),
+        # 🚀 ايموجي
+        MessageEntityCustomEmoji(offset=34, length=2, document_id=5798941981224737816),
+        # 🤖 ايموجي
+        MessageEntityCustomEmoji(offset=71, length=2, document_id=5796499583647359561),
+        # 🛡️ ايموجي
+        MessageEntityCustomEmoji(offset=109, length=2, document_id=5796526727840669257),
+        # 📂 ايموجي
+        MessageEntityCustomEmoji(offset=156, length=2, document_id=5798482080421649554),
+        # كل النص عريض من الأول للآخر
+        MessageEntityBold(offset=0, length=219)
+    ]
         await event.reply(welcome_text, buttons=btns, parse_mode='html')
         return
 
