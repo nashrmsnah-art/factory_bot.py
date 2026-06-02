@@ -325,7 +325,6 @@ async def start(event):
             return
 
     # 2. لو مش مشترك في البوت
-    btns = []
     if not is_subscribed(uid):
         btns = [
             [Button.inline("🔑 تفعيل كود", b"activate")],
@@ -361,8 +360,11 @@ async def start(event):
             MessageEntityBold(offset=0, length=219)
         ]
         
-        await event.reply(welcome_text, buttons=btns, formatting_entities=entities)
+        await event.reply(welcome_text, buttons=btns, entities=entities)
         return
+    
+    # 3. لو مشترك، كمل باقي الكود هنا
+    await event.reply("انت مشترك بالفعل ✅")
 
     # 3. لو مشترك/مطور - القائمة الرئيسية
     days = (datetime.fromisoformat(user['sub_end']) - datetime.now()).days if user.get('sub_end') else 9999
