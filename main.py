@@ -1131,19 +1131,17 @@ async def handle_messages(event):
         try:
             interval = int(text.strip())
         except ValueError:
-            await event.reply("❌ **رقم صحيح**")
+            await event.reply("❌ **ابعت رقم صحيح**\nمثال: 10 أو 30 أو 120")
             return
-        
+
         if interval < 10:
             await event.reply("❌ **10 ثواني أقل حاجة**")
             return
-            
-    await event.reply(f"✅ تمام، الفاصل هيبقى {interval} ثانية")
-        
+
         user['publish_interval'] = interval
         save_db()
         del waiting_for[uid]
-        
+
         # نظبط الرسالة حسب الوقت
         if interval < 60:
             time_text = f"{interval} ثانية"
@@ -1155,15 +1153,11 @@ async def handle_messages(event):
             minutes = interval // 60
             seconds = interval % 60
             time_text = f"{minutes} دقيقة و {seconds} ثانية"
-        
+
         await event.reply(
             f"✅ **وقت النشر: كل {time_text}**\n\n"
             f"البوت هيبعت لكل الجروبات وبعدين يستنى {time_text} ويعيد"
         )
-        await start(event)
-        
-    except ValueError:
-        await event.reply("❌ **ابعت رقم صحيح**\nمثال: 10 أو 30 أو 120")
 
     elif action == 'reply_msg':
         entities = extract_entities_from_message(event.message)
