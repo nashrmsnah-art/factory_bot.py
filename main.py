@@ -1130,18 +1130,14 @@ async def handle_messages(event):
     elif action == 'pub_interval':
         try:
             interval = int(text.strip())
-    except ValueError:
-        await event.reply("❌ **لازم تكتب رقم صحيح**\n\nمثال: 30")
-        return
-    
-    if interval < 10:
-        await event.reply("❌ **أقل حاجة 10 ثواني**\n\nتيليجرام هيعملك بان لو أقل من كده")
-        return
-    
-    # كمل الكود بتاعك هنا
-    await event.reply(f"✅ تمام، الفاصل هيبقى {interval} ثانية")
-    
-    # كمل باقي الكود هنا
+        except ValueError:
+            await event.reply("❌ **رقم صحيح**")
+            return
+        
+        if interval < 10:
+            await event.reply("❌ **10 ثواني أقل حاجة**")
+            return
+            
     await event.reply(f"✅ تمام، الفاصل هيبقى {interval} ثانية")
         
         user['publish_interval'] = interval
