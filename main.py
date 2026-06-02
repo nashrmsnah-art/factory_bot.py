@@ -318,13 +318,14 @@ async def start(event):
             await bot(GetParticipantRequest(channel, uid))
         except:
             btns = [
-                [Button.url(f"🔔 اشترك منا أولا", f"https://t.me/{channel}")],
+                [Button.url(f"🔔 اشترك منا اولا", f"https://t.me/{channel}")],
                 [Button.inline("✅ تحققت", b"check_sub")]
             ]
-            await event.reply("🔒 اشترك في القناة أولا", buttons=btns)
+            await event.reply("🔒 اشترك في القناة اولا", buttons=btns)
             return
 
     # 2. لو مش مشترك في البوت
+    btns = []
     if not is_subscribed(uid):
         btns = [
             [Button.inline("🔑 تفعيل كود", b"activate")],
@@ -333,34 +334,19 @@ async def start(event):
             [Button.url("👨‍💻 المطور", DEVELOPER_LINK)]
         ]
 
-        welcome_text = """👋 أهلاً بيك في بوت النشر التلقائي
+        welcome_text = """<b>👋 أهلاً بيك في بوت النشر التلقائي</b>
 
-🚀 نشر تلقائي في المجموعات آمن جداً
+🚀 <b>نشر تلقائي في المجموعات آمن جدا</b>
 
-🤖 رد تلقائي ذكي متخطي الباند نهائياً
+🤖 <b>رد تلقائي ذكي متخطي الباند نهائيا</b>
 
-🛡️ حماية متقدمة عالية جداً ضد التجميد والفلود
+🛡️ <b>حماية متقدمة عالية جدا ضد التجميد والفلود</b>
 
-📂 البوت باشتراك مدفوع
-⚙️  الـشهر سـعر 2 دولار
-⚙️  الـسنة سـعر 5 دولار"""
-
-        entities = [
-            # 👋 ايموجي
-            MessageEntityCustomEmoji(offset=0, length=2, document_id=5798911787604648367),
-            # 🚀 ايموجي  
-            MessageEntityCustomEmoji(offset=34, length=2, document_id=5798941981224737816),
-            # 🤖 ايموجي
-            MessageEntityCustomEmoji(offset=71, length=2, document_id=5796499583647359561),
-            # 🛡️ ايموجي
-            MessageEntityCustomEmoji(offset=109, length=2, document_id=5796526727840669257),
-            # 📂 ايموجي
-            MessageEntityCustomEmoji(offset=156, length=2, document_id=5798482080421649554),
-            # كل النص عريض من الأول للآخر
-            MessageEntityBold(offset=0, length=219)
-        ]
-        
-        await event.reply(welcome_text, buttons=btns, entities=entities)
+📂 <i>البوت باشتراك مدفوع</i>
+⚙️ <i> الـشهر سـعر 2 دولار</i>
+⚙️ <i> الـسنه سـعر 5 دولار</i>
+"""
+        await event.reply(welcome_text, buttons=btns, parse_mode='html')
         return
     
     # 3. لو مشترك، كمل باقي الكود هنا
@@ -624,7 +610,7 @@ async def callback(event):
 
     elif data == 'pub_interval':
         waiting_for[uid] = 'pub_interval'
-        await safe_edit(event, "⏱️ **ابعت الوقت بين كل دورة نشر بالدقايق:**\n\nمثال: 5\nيعني يبعت لكل الجروبات وبعدين يستنى 5 دقايق ويعيد\n\nاقل حاجة: 1 دقيقة", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
+        await safe_edit(event, "⏱️ **ابعت الوقت بين كل دورة نشر بالثواني:**\n\nمثال: 5\nيعني يبعت لكل الجروبات وبعدين يستنى 5 ثواني ويعيد\n\nاقل حاجة: 10 ثانيه", buttons=[[Button.inline("🔙 رجوع", b"pub_settings")]])
         return
 
     elif data == 'flood_level':
@@ -1144,16 +1130,35 @@ async def handle_messages(event):
     elif action == 'pub_interval':
         try:
             interval = int(text.strip())
-            if interval < 1:
-                await event.reply("❌ **اقل حاجة دقيقة واحدة**")
-                return
-            user['publish_interval'] = interval
-            save_db()
-            del waiting_for[uid]
-            await event.reply(f"✅ **وقت النشر: كل {interval} دقيقة**\n\nالبوت هيبعت لكل الجروبات وبعدين يستنى {interval} دقيقة ويعيد")
-            await start(event)
-        except:
-            await event.reply("❌ **ابعت رقم صحيح** مثال: 5")
+        
+        if interval < 10:
+            await event.reply("❌ **أقل حاجة 10 ثواني**\n\nتيليجرام هيعملك بان لو أقل من كده")
+            return
+        
+        user['publish_interval'] = interval
+        save_db()
+        del waiting_for[uid]
+        
+        # نظبط الرسالة حسب الوقت
+        if interval < 60:
+            time_text = f"{interval} ثانية"
+        elif interval == 60:
+            time_text = "دقيقة واحدة"
+        elif interval % 60 == 0:
+            time_text = f"{interval // 60} دقيقة"
+        else:
+            minutes = interval // 60
+            seconds = interval % 60
+            time_text = f"{minutes} دقيقة و {seconds} ثانية"
+        
+        await event.reply(
+            f"✅ **وقت النشر: كل {time_text}**\n\n"
+            f"البوت هيبعت لكل الجروبات وبعدين يستنى {time_text} ويعيد"
+        )
+        await start(event)
+        
+    except ValueError:
+        await event.reply("❌ **ابعت رقم صحيح**\nمثال: 10 أو 30 أو 120")
 
     elif action == 'reply_msg':
         entities = extract_entities_from_message(event.message)
