@@ -14,11 +14,11 @@ import re
 # ===== بيانات البوت =====
 API_ID = 37879014
 API_HASH = 'db129fe3286650ad869b2891abd72df2'
-BOT_TOKEN = os.getenv('')
-ADMIN_ID = 
-DEVELOPER_USERNAME = ''
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+ADMIN_ID = 29449730
+DEVELOPER_USERNAME = 'aabdulrahmaan'
 DEVELOPER_LINK = f'https://t.me/{DEVELOPER_USERNAME}'
-REQUIRED_CHANNELS = ['']
+REQUIRED_CHANNELS = ['F2F2FFF']
 DB_FILE = 'database.json'
 BACKUP_FILE = 'sessions_backup.json'
 SUB_PRICE = 2
