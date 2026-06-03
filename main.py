@@ -464,18 +464,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"<b>❌ الباسورد غلط: {str(e)}</b>", parse_mode='HTML')
         
         # استقبال سكرين الدفع
-        elif state == "awaiting_payment_proof":
-            if not update.message.photo:
-                await update.message.reply_text("<b>❌ لازم ترسل صورة</b>", parse_mode='HTML')
-                return
+    elif state == "awaiting_payment_proof":
+        if not update.message.photo:
+            await update.message.reply_text("<b>❌ لازم ترسل صورة</b>", parse_mode='HTML')
+            return
             
             caption = update.message.caption or "0"
             amount = 0.0
-            for word in caption.replace("$","").split():
+            for word in caption.replace("$", "").split():
                 try:
                     amount = float(word)
                     break
-                except: pass
+                except:
+                    pass
             
             if amount <= 0:
                 await update.message.reply_text("<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> لازم تكتب المبلغ في الكابشن </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>", parse_mode='HTML')
@@ -491,7 +492,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await set_user_state(user_id, None)
             await update.message.reply_text("<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> تم استلام الإيصال، جاري المراجعة </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>", parse_mode='HTML')
             
-            # اشعار للمطور
             keyboard = [
                 [InlineKeyboardButton("✅ تأكيد", callback_data=f"confirm_pay_{payment_id}")],
                 [InlineKeyboardButton("❌ رفض", callback_data=f"reject_pay_{payment_id}")]
