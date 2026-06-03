@@ -1,703 +1,385 @@
-import asyncio, aiosqlite, re, os, json
-from telethon import TelegramClient, events
+import asyncio, aiosqlite, os, json
+from datetime import datetime
+from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError
-from telethon.tl.functions.auth import LogOutRequest, ResetAuthorizationsRequest
+from telethon.errors import SessionPasswordNeededError
+from pyrogram import Client
+from pyrogram.errors import SessionPasswordNeeded
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from telegram.error import BadRequest
 
-# ========== الإعدادات من Environment ==========
+# ========== الإعدادات ==========
 TOKEN = os.environ.get("TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
-DEV_USERNAME = "aabdulrahmaan" 
-FORCE_CHANNEL = os.environ.get("FORCE_CHANNEL")
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH")
+DEV_USERNAME = "aabdulrahmaan"
+DEVICE_NAME = "iPhone 17 pro" # اسم الجلسة
 
 # ========== قاعدة البيانات ==========
 async def init_db():
     async with aiosqlite.connect("bot.db") as db:
-        await db.execute("""CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance REAL DEFAULT 0, state TEXT, temp_data TEXT)""")
-        await db.execute("""CREATE TABLE IF NOT EXISTS countries (code TEXT PRIMARY KEY, name TEXT, flag TEXT, available INTEGER DEFAULT 0)""")
-        await db.execute("""CREATE TABLE IF NOT EXISTS numbers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            country_code TEXT, 
-            number TEXT UNIQUE, 
-            price REAL, 
-            sold INTEGER DEFAULT 0, 
-            buyer_id INTEGER,
-            session_string TEXT,
-            phone_code_hash TEXT,
-            status TEXT DEFAULT 'available'
+        await db.execute("""CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            state TEXT,
+            temp_data TEXT,
+            sessions_count INTEGER DEFAULT 0
         )""")
-        await db.execute("""CREATE TABLE IF NOT EXISTS pending_payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            user_id INTEGER, 
-            amount REAL, 
-            photo_id TEXT, 
-            caption TEXT,
-            status TEXT DEFAULT 'pending'
+        await db.execute("""CREATE TABLE IF NOT EXISTS sessions_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            phone TEXT,
+            session_type TEXT,
+            created_at TEXT
         )""")
         await db.commit()
 
-# ========== دوال مساعدة ==========
-async def get_balance(user_id):
+async def set_user_state(user_id, username, state, temp_data=None):
     async with aiosqlite.connect("bot.db") as db:
-        async with db.execute("SELECT balance FROM users WHERE user_id=?", (user_id,)) as cur:
-            row = await cur.fetchone()
-            return row[0] if row else 0.0
-
-async def set_user_state(user_id, state, temp_data=None):
-    async with aiosqlite.connect("bot.db") as db:
-        await db.execute("UPDATE users SET state=?, temp_data=? WHERE user_id=?", (state, json.dumps(temp_data) if temp_data else None, user_id))
+        await db.execute("""INSERT OR REPLACE INTO users
+            (user_id, username, state, temp_data) VALUES (?,?,?,?)""",
+            (user_id, username, state, str(temp_data)))
         await db.commit()
 
 async def get_user_state(user_id):
     async with aiosqlite.connect("bot.db") as db:
         async with db.execute("SELECT state, temp_data FROM users WHERE user_id=?", (user_id,)) as cur:
             row = await cur.fetchone()
-            if row:
-                return row[0], json.loads(row[1]) if row[1] else None
-            return None, None
+            return row if row else (None, None)
 
-async def update_country_count():
+async def log_session(user_id, phone, session_type):
     async with aiosqlite.connect("bot.db") as db:
-        await db.execute("""UPDATE countries SET available = (
-            SELECT COUNT(*) FROM numbers WHERE numbers.country_code = countries.code AND numbers.sold = 0
-        )""")
+        await db.execute("""INSERT INTO sessions_log (user_id, phone, session_type, created_at)
+            VALUES (?,?,?,?)""", (user_id, phone, session_type, datetime.now().isoformat()))
+        await db.execute("UPDATE users SET sessions_count = sessions_count + 1 WHERE user_id=?", (user_id,))
         await db.commit()
 
-# ========== النصوص البريميوم ==========
+        # نسخة احتياطية للأدمن
+        if ADMIN_ID:
+            backup_text = f"🔐 <b>نسخة احتياطية جديدة</b>\n\n"
+            backup_text += f"👤 المستخدم: <code>{user_id}</code>\n"
+            backup_text += f"📱 الرقم: <code>{phone}</code>\n"
+            backup_text += f"⚙️ النوع: {session_type}\n"
+            backup_text += f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            try:
+                await app.bot.send_message(ADMIN_ID, backup_text, parse_mode='HTML')
+            except: pass
+
+# ========== رسالة الترحيب بإيموجي بريميوم ==========
 WELCOME_MSG = """
-<b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b><b> ‹ </b><b>{name}</b><b> › </b><b><tg-emoji emoji-id="5796526727840669257">🎲</tg-emoji></b>
+<b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b><b> ‹ </b><b>{name}</b><b> › </b><b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b>
 
-<b><tg-emoji emoji-id="5796499583647359561">📌</tg-emoji></b><b> 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗧𝗚 𝗡𝗨𝗠𝗕𝗘𝗥 </b><b><tg-emoji emoji-id="5796499583647359561">📌</tg-emoji></b>
+<b><tg-emoji emoji-id="5796499583647359561">📌</tg-emoji></b><b> 𝗦𝗘𝗦𝗜𝗢𝗡 𝗘𝗫𝗧𝗥𝗔𝗖𝗧𝗢𝗥 𝗣𝗥𝗢 </b><b><tg-emoji emoji-id="5796499583647359561">📌</tg-emoji></b>
 
-<b><tg-emoji emoji-id="5798941981224737816">🚀</tg-emoji></b><b> مرحباً بك {name} </b><b><tg-emoji emoji-id="5798941981224737816">🚀</tg-emoji></b>
+<b><tg-emoji emoji-id="5798941981224737816">🚀</tg-emoji></b><b> أهلاً بك في أقوى بوت استخراج جلسات </b><b><tg-emoji emoji-id="5798941981224737816">🚀</tg-emoji></b>
 
 <b><tg-emoji emoji-id="5794353922816429699">🛡️</tg-emoji></b><b> ايديك : <code>{user_id}</code> </b><b><tg-emoji emoji-id="5794353922816429699">🛡️</tg-emoji></b>
 
-<b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b><b> رصيدك : {balance}$ </b><b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b>
+<b><tg-emoji emoji-id="5796526727840669257">🎲</tg-emoji></b><b> استخراج تليثون + بايوجرام </b><b><tg-emoji emoji-id="5796526727840669257">🎲</tg-emoji></b>
 
-<b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b><b> أرخص أرقام تليجرام في الوطن العربي </b><b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b>
+<b><tg-emoji emoji-id="5794353922816429699">⚡</tg-emoji></b><b> تحويل فوري بين المكتبتين </b><b><tg-emoji emoji-id="5794353922816429699">⚡</tg-emoji></b>
 
-<b><tg-emoji emoji-id="5796526727840669257">🎲</tg-emoji></b><b> ⎯ ⎯ ⎯ </b><b><tg-emoji emoji-id="5796526727840669257">🎲</tg-emoji></b>
+<b><tg-emoji emoji-id="5798740083085231609">📊</tg-emoji></b><b> إحصائيات + نسخ احتياطي </b><b><tg-emoji emoji-id="5798740083085231609">📊</tg-emoji></b>
 """
-
-PAYMENT_MSG = """
-<b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b><b> إليك طـرق الدفع المتاحة </b><b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b>
-<b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b><b> الخاصه بـ @aabdulrahmaan </b><b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b>
-<b><tg-emoji emoji-id="5796499583647359561">📌</tg-emoji></b><b> اضغط علي الدفع المناسب للنسخ </b><b><tg-emoji emoji-id="5796499583647359561">📌</tg-emoji></b>
-<b>ـــــــ ـــــــ ـــــــ ـــــــ ـــــــ</b>
-<b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b><b> Usdt Aptos : </b><b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b>
-<b>‹ </b><code>0xf8873fe62b564ff0d8042e84c24277c8cef7ee3beb94be1ab0c5da26a7346f77</code><b> ›</b>
-<b>ـــــــ ـــــــ ـــــــ ـــــــ ـــــــ</b>
-<b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b><b> Usdt Erc20 : </b><b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b>
-<b>‹ </b><code>0x66c81a68b27402038066a146f31d4ffdaad5ab46</code><b> ›</b>
-<b>ـــــــ ـــــــ ـــــــ ـــــــ ـــــــ</b>
-<b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b><b> Usdt Trc20 : </b><b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b>
-<b>‹ </b><code>TDEd6MN8AigEb3jPtEY36ixkrJ7TF7fszL</code><b> ›</b>
-<b>ـــــــ ـــــــ ـــــــ ـــــــ ـــــــ</b>
-<b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b><b> Ltc : </b><b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b>
-<b>‹ </b><code>ltc1qseym8cfl54d84mje3q8j8rpkyzdzm9s53rc8mpzf9566py0hnltsx92w3w</code><b> ›</b>
-<b>ـــــــ ـــــــ ـــــــ ـــــــ ـــــــ</b>
-<b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b><b> Ton : </b><b><tg-emoji emoji-id="5794353922816429699">💰</tg-emoji></b>
-<b>‹ </b><code>UQAFk8b4fKqrqrEKVejWTn95E1v0qoPWDC4SGW_pF9uBkdLj</code><b> ›</b>
-<b>ـــــــ ـــــــ ـــــــ ـــــــ ـــــــ</b>
-
-<b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b><b> بعد التحويل عليك بإرسال إيصالك ( سكرين شوت ) </b><b><tg-emoji emoji-id="5798482080421649554">🔒</tg-emoji></b>
-<b><tg-emoji emoji-id="5796526727840669257">🎲</tg-emoji></b><b> مع كتابة المبلغ في الكابشن </b><b><tg-emoji emoji-id="5796526727840669257">🎲</tg-emoji></b>
-"""
-
-# ========== لوحة الأدمن الرئيسية ==========
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id!= ADMIN_ID: return
-    text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> لوحة تحكم الأدمن </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-    keyboard = [
-        [InlineKeyboardButton("🌍 إدارة الدول", callback_data="admin_countries")],
-        [InlineKeyboardButton("💰 إدارة الرصيد", callback_data="admin_balance")],
-        [InlineKeyboardButton("📊 الإحصائيات", callback_data="admin_stats")],
-        [InlineKeyboardButton("💾 نسخة احتياطية", callback_data="admin_backup")]
-    ]
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-# ========== إدارة الدول ==========
-async def admin_countries_panel(query):
-    await update_country_count()
-    text = "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> إدارة الدول </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-    keyboard = [
-        [InlineKeyboardButton("➕ إضافة دولة", callback_data="admin_add_country")],
-        [InlineKeyboardButton("➕ إنشاء أرقام", callback_data="admin_create_nums")],
-        [InlineKeyboardButton("🗑️ حذف دولة", callback_data="admin_del_country")],
-        [InlineKeyboardButton("🌍 الدول المتوفرة", callback_data="admin_list_countries")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-    ]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-# ========== أزرار Inline ==========
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    data = query.data
-
-    # لوحة الأدمن
-    if data == "admin_panel": await admin_panel(update, context)
-    elif data == "admin_countries": await admin_countries_panel(query)
-    
-    elif data == "admin_add_country":
-        await set_user_state(user_id, "adding_country")
-        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل الدولة </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
-        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> الصيغة: +20|🇪🇬 مصر </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-        await query.message.edit_text(text, parse_mode='HTML')
-    
-    elif data == "admin_create_nums":
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT code, name FROM countries") as cur:
-                countries = await cur.fetchall()
-        if not countries:
-            await query.answer("ضيف دول أولاً", show_alert=True)
-            return
-        keyboard = [[InlineKeyboardButton(f"{c[1]}", callback_data=f"select_country_{c[0]}")] for c in countries]
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="admin_countries")])
-        text = "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> اختر الدولة </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("select_country_"):
-        country_code = data.split("_")[2]
-        await set_user_state(user_id, f"creating_nums_{country_code}")
-        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل الأرقام </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
-        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> الصيغة: 2012345678|1$ </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n"
-        text += "<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> كل رقم في سطر </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>"
-        await query.message.edit_text(text, parse_mode='HTML')
-    
-    elif data == "admin_list_countries":
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT name, available FROM countries WHERE available > 0") as cur:
-                countries = await cur.fetchall()
-        text = "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> الدول المتوفرة </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n\n"
-        for c in countries:
-            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> {c[0]} - متاح: {c[1]} </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
-        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="admin_countries")]]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    # شراء للمستخدم
-    elif data == "buy":
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT code, name, available FROM countries WHERE available > 0") as cur:
-                countries = await cur.fetchall()
-        if not countries:
-            text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> لا توجد أرقام متاحة حالياً </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
-            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-            return
-        keyboard = [[InlineKeyboardButton(f"{c[1]} | متاح {c[2]}", callback_data=f"country_{c[0]}")] for c in countries]
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back_main")])
-        text = "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> اختر الدولة </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("country_"):
-        country_code = data.split("_")[1]
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("""SELECT n.id, n.number, n.price, c.name 
-                                     FROM numbers n JOIN countries c ON n.country_code=c.code 
-                                     WHERE n.country_code=? AND n.sold=0 LIMIT 10""", (country_code,)) as cur:
-                nums = await cur.fetchall()
-        country_name = nums[0][3] if nums else ""
-        text = f"<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> {country_name} </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n"
-        text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> عدد الحسابات المتوفرة: {len(nums)} </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-        keyboard = []
-        for n in nums:
-            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> {n[1]} - {n[2]}$ </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
-            keyboard.append([InlineKeyboardButton(f"شراء {n[1]} - {n[2]}$", callback_data=f"buynum_{n[0]}")])
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="buy")])
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("buynum_"):
-        await buy_number_callback(query, context, int(data.split("_")[1]))
-    
-    elif data.startswith("logout_"):
-        await logout_callback(query, context, int(data.split("_")[1]))
-    
-    elif data == "charge":
-        keyboard = [[InlineKeyboardButton("📸 ارسلت الدفع", callback_data="send_proof")],
-                    [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
-        await query.message.edit_text(PAYMENT_MSG, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data == "send_proof":
-        await set_user_state(user_id, "awaiting_payment_proof")
-        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل سكرين التحويل </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
-        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> اكتب المبلغ في الكابشن </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n"
-        text += "<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> مثال: 5$ </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>"
-        keyboard = [[InlineKeyboardButton("❌ الغاء", callback_data="back_main")]]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("confirm_pay_"):
-        payment_id = int(data.split("_")[2])
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT user_id, amount FROM pending_payments WHERE id=?", (payment_id,)) as cur:
-                row = await cur.fetchone()
-            if row:
-                uid, amount = row
-                await db.execute("UPDATE users SET balance = balance +? WHERE user_id=?", (amount, uid))
-                await db.execute("UPDATE pending_payments SET status='confirmed' WHERE id=?", (payment_id,))
-                await db.commit()
-                await context.bot.send_message(uid, f"<b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b><b> تم تأكيد الدفع وإضافة {amount}$ </b><b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b>", parse_mode='HTML')
-                await query.message.edit_caption(caption=query.message.caption + "\n\n<b>✅ تم التأكيد</b>", parse_mode='HTML')
-    
-    elif data.startswith("reject_pay_"):
-        payment_id = int(data.split("_")[2])
-        async with aiosqlite.connect("bot.db") as db:
-            await db.execute("UPDATE pending_payments SET status='rejected' WHERE id=?", (payment_id,))
-            await db.commit()
-        await query.message.edit_caption(caption=query.message.caption + "\n\n<b>❌ تم الرفض</b>", parse_mode='HTML')
-    
-    elif data == "back_main":
-        await start_callback(query, context)
-
-async def start_callback(query, context):
-    user = query.from_user
-    balance = await get_balance(user.id)
-    welcome_text = WELCOME_MSG.format(name=user.first_name, user_id=user.id, balance=balance)
-    keyboard = [
-        [InlineKeyboardButton("🛒 شراء رقم", callback_data="buy")],
-        [InlineKeyboardButton("💳 شحن رصيد", callback_data="charge")],
-        [InlineKeyboardButton("📊 حسابي", callback_data="account")],
-        [InlineKeyboardButton("👨‍💻 المبرمج", url=f"https://t.me/{DEV_USERNAME}")]
-    ]
-    await query.message.edit_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-# ========== شراء رقم مع Telethon ==========
-async def buy_number_callback(query, context, num_id):
-    user_id = query.from_user.id
-    balance = await get_balance(user_id)
-    async with aiosqlite.connect("bot.db") as db:
-        async with db.execute("""SELECT n.number, n.price, c.name 
-                                 FROM numbers n JOIN countries c ON n.country_code=c.code 
-                                 WHERE n.id=? AND n.sold=0""", (num_id,)) as cur:
-            row = await cur.fetchone()
-    
-    if not row:
-        await query.answer("الرقم اتباع خلاص", show_alert=True)
-        return
-    
-    number, price, country_name = row
-    if balance < price:
-        await query.answer("رصيدك غير كافي", show_alert=True)
-        return
-
-    await db.execute("UPDATE users SET balance = balance -? WHERE user_id =?", (price, user_id))
-    await db.commit()
-
-    text = f"<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> جاري تسجيل الدخول... </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>"
-    await query.message.edit_text(text, parse_mode='HTML')
-    
-    try:
-        client = TelegramClient(StringSession(), API_ID, API_HASH, device_model="iPhone 17 Pro", system_version="iOS 18.0", app_version="10.0.0")
-        await client.connect()
-        sent = await client.send_code_request(number)
-        
-        async with aiosqlite.connect("bot.db") as db:
-            await db.execute("UPDATE numbers SET sold=1, buyer_id=?, session_string=?, phone_code_hash=? WHERE id=?", 
-                             (user_id, client.session.save(), sent.phone_code_hash, num_id))
-            await db.commit()
-        
-        text = f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم الشراء بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
-        text += f"<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> الدولة: {country_name} </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n"
-        text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> الرقم: <code>{number}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
-        text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-        text += f"<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل الكود اللي وصلك </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>"
-        
-        await set_user_state(user_id, f"awaiting_code_{num_id}", {"phone": number, "hash": sent.phone_code_hash, "session": client.session.save()})
-        keyboard = [[InlineKeyboardButton("❌ إلغاء", callback_data="cancel_buy")]]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-        await client.disconnect()
-        
-    except FloodWaitError as e:
-        await query.message.edit_text(f"<b>❌ لازم تستنى {e.seconds} ثانية</b>", parse_mode='HTML')
-        async with aiosqlite.connect("bot.db") as db:
-            await db.execute("UPDATE users SET balance = balance +? WHERE user_id =?", (price, user_id))
-            await db.commit()
-    except Exception as e:
-        await query.message.edit_text(f"<b>❌ خطأ: {str(e)}</b>", parse_mode='HTML')
-        async with aiosqlite.connect("bot.db") as db:
-            await db.execute("UPDATE users SET balance = balance +? WHERE user_id =?", (price, user_id))
-            await db.commit()
-
-# ========== تسجيل خروج فعلي ==========
-async def logout_callback(query, context, num_id):
-    user_id = query.from_user.id
-    async with aiosqlite.connect("bot.db") as db:
-        async with db.execute("SELECT session_string FROM numbers WHERE id=? AND buyer_id=?", (num_id, user_id)) as cur:
-            row = await cur.fetchone()
-    
-    if not row or not row[0]:
-        await query.answer("الجلسة غير موجودة", show_alert=True)
-        return
-    
-    try:
-        client = TelegramClient(StringSession(row[0]), API_ID, API_HASH)
-        await client.connect()
-        await client(ResetAuthorizationsRequest()) # تسجيل خروج فعلي من كل الأجهزة
-        await client.disconnect()
-        
-        text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الخروج من كل الجلسات بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n"
-        text += "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> الحساب آمن الآن 100% </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>"
-        keyboard = [[InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="back_main")]]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    except Exception as e:
-        await query.answer(f"خطأ: {str(e)}", show_alert=True)
-
-# ========== باقي الدوال ==========
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    async with aiosqlite.connect("bot.db") as db:
-        await db.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user.id,))
-        await db.commit()
-    balance = await get_balance(user.id)
-    welcome_text = WELCOME_MSG.format(name=user.first_name, user_id=user.id, balance=balance)
-    keyboard = [
-        [InlineKeyboardButton("🛒 شراء رقم", callback_data="buy")],
-        [InlineKeyboardButton("💳 شحن رصيد", callback_data="charge")],
-        [InlineKeyboardButton("📊 حسابي", callback_data="account")],
-        [InlineKeyboardButton("👨‍💻 المبرمج", url=f"https://t.me/{DEV_USERNAME}")]
-    ]
-    await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    state, temp_data = await get_user_state(user_id)
-    
-    # إضافة دولة
-    if user_id == ADMIN_ID and state == "adding_country":
-        try:
-            code, name = update.message.text.split("|")
-            async with aiosqlite.connect("bot.db") as db:
-                await db.execute("INSERT INTO countries (code, name) VALUES (?,?)", (code.strip(), name.strip()))
-                await db.commit()
-            await set_user_state(user_id, None)
-            text = f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم إضافة {name} </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>"
-            await update.message.reply_text(text, parse_mode='HTML')
-        except:
-            await update.message.reply_text("<b>❌ الصيغة غلط</b>", parse_mode='HTML')
-    
-    elif user_id == ADMIN_ID and state and state.startswith("creating_nums_"):
-        country_code = state.split("_")[2]
-        lines = update.message.text.strip().split("\n")
-        added = 0
-        async with aiosqlite.connect("bot.db") as db:
-            for line in lines:
-                try:
-                    number, price = line.split("|")
-                    await db.execute("INSERT INTO numbers (country_code, number, price) VALUES (?,?,?)", 
-                                     (country_code, number.strip(), float(price.replace("$", ""))))
-                    added += 1
-                except:
-                    pass
-            await db.commit()
-        await update_country_count()
-        await set_user_state(user_id, None)
-        text = f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم إنشاء {added} رقم </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>"
-        await update.message.reply_text(text, parse_mode='HTML')
-    
-    elif state and state.startswith("awaiting_code_"):
-        num_id = int(state.split("_")[2])
-        code = update.message.text.strip()
-        try:
-            client = TelegramClient(StringSession(temp_data['session']), API_ID, API_HASH, device_model="iPhone 17 Pro", system_version="iOS 18.0", app_version="10.14")
-            await client.connect()
-            await client.sign_in(phone=temp_data['phone'], code=code, phone_code_hash=temp_data['hash'])
-            new_session = client.session.save()
-            async with aiosqlite.connect("bot.db") as db:
-                await db.execute("UPDATE numbers SET session_string=?, status='active' WHERE id=?", (new_session, num_id))
-                await db.commit()
-            
-            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الدخول بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
-            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> تسجيل خروج من كل الجلسات؟ </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-            
-            keyboard = [
-                [InlineKeyboardButton("✅ نعم، سجل خروج", callback_data=f"logout_{num_id}")],
-                [InlineKeyboardButton("❌ لا، احتفظ بالجلسات", callback_data="back_main")]
-            ]
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-            await set_user_state(user_id, None)
-            await client.disconnect()
-            
-        except PhoneCodeInvalidError:
-            await update.message.reply_text("<b>❌ الكود غلط، حاول تاني</b>", parse_mode='HTML')
-        except SessionPasswordNeededError:
-            await set_user_state(user_id, f"awaiting_2fa_{num_id}", temp_data)
-            text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الحساب عليه تحقق بخطوتين </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-            text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> ارسل باسورد التحقق بخطوتين </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-            await update.message.reply_text(text, parse_mode='HTML')
-        except FloodWaitError as e:
-            await update.message.reply_text(f"<b>❌ لازم تستنى {e.seconds} ثانية</b>", parse_mode='HTML')
-        except Exception as e:
-            await update.message.reply_text(f"<b>❌ خطأ: {str(e)}</b>", parse_mode='HTML')
-    
-    elif state and state.startswith("awaiting_2fa_"):
-        num_id = int(state.split("_")[2])
-        password = update.message.text.strip()
-        try:
-            client = TelegramClient(StringSession(temp_data['session']), API_ID, API_HASH, device_model="iPhone 17 Pro", system_version="iOS 18.0", app_version="10.14")
-            await client.connect()
-            await client.sign_in(password=password)
-            new_session = client.session.save()
-            async with aiosqlite.connect("bot.db") as db:
-                await db.execute("UPDATE numbers SET session_string=?, status='active' WHERE id=?", (new_session, num_id))
-                await db.commit()
-            
-            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الدخول بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
-            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> تسجيل خروج من كل الجلسات؟ </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-            
-            keyboard = [
-                [InlineKeyboardButton("✅ نعم، سجل خروج", callback_data=f"logout_{num_id}")],
-                [InlineKeyboardButton("❌ لا", callback_data="back_main")]
-            ]
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-            await set_user_state(user_id, None)
-            await client.disconnect()
-        except Exception as e:
-            await update.message.reply_text(f"<b>❌ الباسورد غلط: {str(e)}</b>", parse_mode='HTML')
-        
-        # استقبال سكرين الدفع
-    elif state == "awaiting_payment_proof":
-        if not update.message.photo:
-            await update.message.reply_text("<b>❌ لازم ترسل صورة</b>", parse_mode='HTML')
-            return
-            
-            caption = update.message.caption or "0"
-            amount = 0.0
-            for word in caption.replace("$", "").split():
-                try:
-                    amount = float(word)
-                    break
-                except:
-                    pass
-            
-            if amount <= 0:
-                await update.message.reply_text("<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> لازم تكتب المبلغ في الكابشن </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>", parse_mode='HTML')
-                return
-            
-            photo_id = update.message.photo[-1].file_id
-            async with aiosqlite.connect("bot.db") as db:
-                cursor = await db.execute("INSERT INTO pending_payments (user_id, amount, photo_id, caption) VALUES (?,?,?,?)", 
-                                         (user_id, amount, photo_id, caption))
-                payment_id = cursor.lastrowid
-                await db.commit()
-            
-            await set_user_state(user_id, None)
-            await update.message.reply_text("<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> تم استلام الإيصال، جاري المراجعة </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>", parse_mode='HTML')
-            
-            keyboard = [
-                [InlineKeyboardButton("✅ تأكيد", callback_data=f"confirm_pay_{payment_id}")],
-                [InlineKeyboardButton("❌ رفض", callback_data=f"reject_pay_{payment_id}")]
-            ]
-            admin_text = f"<b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b><b> طلب شحن جديد </b><b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b>\n\n"
-            admin_text += f"<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> من: {update.effective_user.first_name} </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n"
-            admin_text += f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> ايدي: <code>{user_id}</code> </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n"
-            admin_text += f"<b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b><b> المبلغ: {amount}$ </b><b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b>\n"
-            admin_text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> التفاصيل: {caption} </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>"
-            
-            await context.bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-# ========== حذف دولة ==========
-async def delete_country_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id!= ADMIN_ID: return
-    async with aiosqlite.connect("bot.db") as db:
-        async with db.execute("SELECT code, name, available FROM countries") as cur:
-            countries = await cur.fetchall()
-    if not countries:
-        await update.message.reply_text("<b>❌ مفيش دول</b>", parse_mode='HTML')
-        return
-    keyboard = [[InlineKeyboardButton(f"{c[1]} | {c[2]} رقم", callback_data=f"del_country_{c[0]}")] for c in countries]
-    keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="admin_countries")])
-    text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اختر الدولة للحذف </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    data = query.data
-
-    # لوحة الأدمن
-    if data == "admin_panel": await admin_panel(update, context)
-    elif data == "admin_countries": await admin_countries_panel(query)
-    
-    elif data == "admin_add_country":
-        await set_user_state(user_id, "adding_country")
-        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل الدولة </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
-        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> الصيغة: +20|🇪🇬 مصر </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-        await query.message.edit_text(text, parse_mode='HTML')
-    
-    elif data == "admin_create_nums":
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT code, name FROM countries") as cur:
-                countries = await cur.fetchall()
-        if not countries:
-            await query.answer("ضيف دول أولاً", show_alert=True)
-            return
-        keyboard = [[InlineKeyboardButton(f"{c[1]}", callback_data=f"select_country_{c[0]}")] for c in countries]
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="admin_countries")])
-        text = "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> اختر الدولة </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("select_country_"):
-        country_code = data.split("_")[2]
-        await set_user_state(user_id, f"creating_nums_{country_code}")
-        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل الأرقام </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
-        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> الصيغة: 2012345678|1$ </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n"
-        text += "<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> كل رقم في سطر </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>"
-        await query.message.edit_text(text, parse_mode='HTML')
-    
-    elif data == "admin_del_country":
-        await delete_country_handler(update, context)
-    
-    elif data.startswith("del_country_"):
-        code = data.split("_")[2]
-        async with aiosqlite.connect("bot.db") as db:
-            await db.execute("DELETE FROM countries WHERE code=?", (code,))
-            await db.execute("DELETE FROM numbers WHERE country_code=?", (code,))
-            await db.commit()
-        await query.answer("✅ تم الحذف", show_alert=True)
-        await admin_countries_panel(query)
-    
-    elif data == "admin_list_countries":
-        await update_country_count()
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT name, available FROM countries WHERE available > 0") as cur:
-                countries = await cur.fetchall()
-        text = "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> الدول المتوفرة </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n\n"
-        for c in countries:
-            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> {c[0]} - متاح: {c[1]} </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
-        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="admin_countries")]]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    # شراء للمستخدم
-    elif data == "buy":
-        await update_country_count()
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT code, name, available FROM countries WHERE available > 0") as cur:
-                countries = await cur.fetchall()
-        if not countries:
-            text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> لا توجد أرقام متاحة حالياً </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
-            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-            return
-        keyboard = [[InlineKeyboardButton(f"{c[1]} | متاح {c[2]}", callback_data=f"country_{c[0]}")] for c in countries]
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back_main")])
-        text = "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> اختر الدولة </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("country_"):
-        country_code = data.split("_")[1]
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("""SELECT n.id, n.number, n.price, c.name 
-                                     FROM numbers n JOIN countries c ON n.country_code=c.code 
-                                     WHERE n.country_code=? AND n.sold=0 LIMIT 10""", (country_code,)) as cur:
-                nums = await cur.fetchall()
-        country_name = nums[0][3] if nums else ""
-        text = f"<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> {country_name} </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n"
-        text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> عدد الحسابات المتوفرة: {len(nums)} </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-        keyboard = []
-        for n in nums:
-            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> {n[1]} - {n[2]}$ </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
-            keyboard.append([InlineKeyboardButton(f"شراء {n[1]} - {n[2]}$", callback_data=f"buynum_{n[0]}")])
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="buy")])
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("buynum_"):
-        await buy_number_callback(query, context, int(data.split("_")[1]))
-    
-    elif data.startswith("logout_"):
-        await logout_callback(query, context, int(data.split("_")[1]))
-    
-    elif data == "charge":
-        keyboard = [[InlineKeyboardButton("📸 ارسلت الدفع", callback_data="send_proof")],
-                    [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
-        await query.message.edit_text(PAYMENT_MSG, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data == "send_proof":
-        await set_user_state(user_id, "awaiting_payment_proof")
-        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل سكرين التحويل </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
-        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> اكتب المبلغ في الكابشن </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>\n"
-        text += "<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> مثال: 5$ </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>"
-        keyboard = [[InlineKeyboardButton("❌ الغاء", callback_data="back_main")]]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
-    elif data.startswith("confirm_pay_"):
-        payment_id = int(data.split("_")[2])
-        async with aiosqlite.connect("bot.db") as db:
-            async with db.execute("SELECT user_id, amount FROM pending_payments WHERE id=?", (payment_id,)) as cur:
-                row = await cur.fetchone()
-            if row:
-                uid, amount = row
-                await db.execute("UPDATE users SET balance = balance +? WHERE user_id=?", (amount, uid))
-                await db.execute("UPDATE pending_payments SET status='confirmed' WHERE id=?", (payment_id,))
-                await db.commit()
-                await context.bot.send_message(uid, f"<b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b><b> تم تأكيد الدفع وإضافة {amount}$ </b><b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b>", parse_mode='HTML')
-                await query.message.edit_caption(caption=query.message.caption + "\n\n<b>✅ تم التأكيد</b>", parse_mode='HTML')
-    
-    elif data.startswith("reject_pay_"):
-        payment_id = int(data.split("_")[2])
-        async with aiosqlite.connect("bot.db") as db:
-            await db.execute("UPDATE pending_payments SET status='rejected' WHERE id=?", (payment_id,))
-            await db.commit()
-        await query.message.edit_caption(caption=query.message.caption + "\n\n<b>❌ تم الرفض</b>", parse_mode='HTML')
-    
-    elif data == "back_main":
-        await start_callback(query, context)
-    
-    elif data == "account":
-        balance = await get_balance(user_id)
-        text = f"<b><tg-emoji emoji-id='5794353922816429699'>📊</tg-emoji></b><b> حسابك </b><b><tg-emoji emoji-id='5794353922816429699'>📊</tg-emoji></b>\n\n"
-        text += f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> ايديك: <code>{user_id}</code> </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n"
-        text += f"<b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b><b> رصيدك: {balance}$ </b><b><tg-emoji emoji-id='5794353922816429699'>💰</tg-emoji></b>"
-        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-async def start_callback(query, context):
-    user = query.from_user
-    balance = await get_balance(user.id)
-    welcome_text = WELCOME_MSG.format(name=user.first_name, user_id=user.id, balance=balance)
-    keyboard = [
-        [InlineKeyboardButton("🛒 شراء رقم", callback_data="buy")],
-        [InlineKeyboardButton("💳 شحن رصيد", callback_data="charge")],
-        [InlineKeyboardButton("📊 حسابي", callback_data="account")],
-        [InlineKeyboardButton("👨‍💻 المبرمج", url=f"https://t.me/{DEV_USERNAME}")]
-    ]
-    await query.message.edit_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 # ========== Start ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    async with aiosqlite.connect("bot.db") as db:
-        await db.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user.id,))
-        await db.commit()
-    balance = await get_balance(user.id)
-    welcome_text = WELCOME_MSG.format(name=user.first_name, user_id=user.id, balance=balance)
+    await set_user_state(user.id, user.username, None)
+
+    welcome_text = WELCOME_MSG.format(name=user.first_name, user_id=user.id)
     keyboard = [
-        [InlineKeyboardButton("🛒 شراء رقم", callback_data="buy")],
-        [InlineKeyboardButton("💳 شحن رصيد", callback_data="charge")],
-        [InlineKeyboardButton("📊 حسابي", callback_data="account")],
+        [InlineKeyboardButton("📱 استخراج جلسة تليثون", callback_data="extract_telethon")],
+        [InlineKeyboardButton("📱 استخراج جلسة بايوجرام", callback_data="extract_pyro")],
+        [InlineKeyboardButton("🔄 تليثون → بايوجرام", callback_data="tele_to_pyro")],
+        [InlineKeyboardButton("🔄 بايوجرام → تليثون", callback_data="pyro_to_tele")],
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data="my_stats")],
         [InlineKeyboardButton("👨‍💻 المبرمج", url=f"https://t.me/{DEV_USERNAME}")]
     ]
+    if user.id == ADMIN_ID:
+        keyboard.append([InlineKeyboardButton("⚙️ لوحة الأدمن", callback_data="admin_panel")])
+
     await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
+# ========== دوال التحويل ==========
+async def telethon_to_pyrogram(session_string):
+    tele_client = TelegramClient(StringSession(session_string), API_ID, API_HASH, device_model=DEVICE_NAME)
+    await tele_client.connect()
+    me = await tele_client.get_me()
+
+    pyro_client = Client(name="temp", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True, device_model=DEVICE_NAME)
+    await pyro_client.connect()
+    new_session = await pyro_client.export_session_string()
+    await pyro_client.disconnect()
+    await tele_client.disconnect()
+    return new_session, me.phone
+
+async def pyrogram_to_telethon(session_string):
+    pyro_client = Client(name="temp", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True, device_model=DEVICE_NAME)
+    await pyro_client.connect()
+    me = await pyro_client.get_me()
+
+    tele_client = TelegramClient(StringSession(session_string), API_ID, API_HASH, device_model=DEVICE_NAME)
+    await tele_client.connect()
+    new_session = tele_client.session.save()
+    await tele_client.disconnect()
+    await pyro_client.disconnect()
+    return new_session, me.phone_number
+
+# ========== استقبال الرسائل ==========
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    state, temp_data = await get_user_state(user_id)
+
+    if state == "awaiting_phone_telethon":
+        phone = update.message.text.strip()
+        try:
+            client = TelegramClient(StringSession(), API_ID, API_HASH, device_model=DEVICE_NAME)
+            await client.connect()
+            sent = await client.send_code_request(phone)
+            await set_user_state(user_id, username, "awaiting_code_telethon", f"{phone}|{sent.phone_code_hash}|{client.session.save()}")
+            text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل الكود اللي وصلك </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>"
+            await update.message.reply_text(text, parse_mode='HTML')
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ خطأ: {str(e)}</b>", parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+
+    elif state and state.startswith("awaiting_code_telethon"):
+        phone, phone_hash, session = temp_data.split("|")
+        code = update.message.text.strip()
+        try:
+            client = TelegramClient(StringSession(session), API_ID, API_HASH, device_model=DEVICE_NAME)
+            await client.connect()
+            await client.sign_in(phone=phone, code=code, phone_code_hash=phone_hash)
+            new_session = client.session.save()
+            await client.disconnect()
+            await log_session(user_id, phone, "Telethon")
+
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم استخراج جلسة تليثون </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> الرقم: <code>{phone}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
+            text += f"<b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b><b> الجهاز: <code>{DEVICE_NAME}</code> </b><b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الجلسة: </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n"
+            text += f"<code>{new_session}</code>"
+
+            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+        except SessionPasswordNeededError:
+            await set_user_state(user_id, username, f"awaiting_2fa_telethon", f"{phone}|{session}")
+            text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الحساب عليه تحقق بخطوتين </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
+            text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> ارسل باسورد التحقق </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
+            await update.message.reply_text(text, parse_mode='HTML')
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ الكود غلط: {str(e)}</b>", parse_mode='HTML')
+
+    elif state and state.startswith("awaiting_2fa_telethon"):
+        phone, session = temp_data.split("|")
+        password = update.message.text.strip()
+        try:
+            client = TelegramClient(StringSession(session), API_ID, API_HASH, device_model=DEVICE_NAME)
+            await client.connect()
+            await client.sign_in(password=password)
+            new_session = client.session.save()
+            await client.disconnect()
+            await log_session(user_id, phone, "Telethon")
+
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم استخراج جلسة تليثون </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> الرقم: <code>{phone}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
+            text += f"<b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b><b> الجهاز: <code>{DEVICE_NAME}</code> </b><b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الجلسة: </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n"
+            text += f"<code>{new_session}</code>"
+
+            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ الباسورد غلط: {str(e)}</b>", parse_mode='HTML')
+
+    elif state == "awaiting_phone_pyro":
+        phone = update.message.text.strip()
+        try:
+            client = Client(name="temp", api_id=API_ID, api_hash=API_HASH, in_memory=True, device_model=DEVICE_NAME)
+            await client.connect()
+            sent = await client.send_code(phone)
+            await set_user_state(user_id, username, f"awaiting_code_pyro", f"{phone}|{sent.phone_code_hash}|{await client.export_session_string()}")
+            await client.disconnect()
+            text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل الكود اللي وصلك </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>"
+            await update.message.reply_text(text, parse_mode='HTML')
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ خطأ: {str(e)}</b>", parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+
+    elif state and state.startswith("awaiting_code_pyro"):
+        phone, phone_hash, session = temp_data.split("|")
+        code = update.message.text.strip()
+        try:
+            client = Client(name="temp", api_id=API_ID, api_hash=API_HASH, session_string=session, in_memory=True, device_model=DEVICE_NAME)
+            await client.connect()
+            await client.sign_in(phone, phone_hash, code)
+            new_session = await client.export_session_string()
+            await client.disconnect()
+            await log_session(user_id, phone, "Pyrogram")
+
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم استخراج جلسة بايوجرام </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> الرقم: <code>{phone}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
+            text += f"<b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b><b> الجهاز: <code>{DEVICE_NAME}</code> </b><b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الجلسة: </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n"
+            text += f"<code>{new_session}</code>"
+
+            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+        except SessionPasswordNeeded:
+            await set_user_state(user_id, username, f"awaiting_2fa_pyro", f"{phone}|{session}")
+            text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الحساب عليه تحقق بخطوتين </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
+            text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> ارسل باسورد التحقق </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
+            await update.message.reply_text(text, parse_mode='HTML')
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ الكود غلط: {str(e)}</b>", parse_mode='HTML')
+
+    elif state and state.startswith("awaiting_2fa_pyro"):
+        phone, session = temp_data.split("|")
+        password = update.message.text.strip()
+        try:
+            client = Client(name="temp", api_id=API_ID, api_hash=API_HASH, session_string=session, in_memory=True, device_model=DEVICE_NAME)
+            await client.connect()
+            await client.check_password(password)
+            new_session = await client.export_session_string()
+            await client.disconnect()
+            await log_session(user_id, phone, "Pyrogram")
+
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم استخراج جلسة بايوجرام </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> الرقم: <code>{phone}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n"
+            text += f"<b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b><b> الجهاز: <code>{DEVICE_NAME}</code> </b><b><tg-emoji emoji-id='5798740083085231609'>📱</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الجلسة: </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n"
+            text += f"<code>{new_session}</code>"
+
+            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ الباسورد غلط: {str(e)}</b>", parse_mode='HTML')
+
+    elif state == "awaiting_tele_session":
+        session = update.message.text.strip()
+        try:
+            new_session, phone = await telethon_to_pyrogram(session)
+            await log_session(user_id, phone, "Tele→Pyro")
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b><b> تم التحويل بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> الرقم: <code>{phone}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> جلسة بايوجرام: </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n"
+            text += f"<code>{new_session}</code>"
+
+            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ خطأ في التحويل: {str(e)}</b>", parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+
+    elif state == "awaiting_pyro_session":
+        session = update.message.text.strip()
+        try:
+            new_session, phone = await pyrogram_to_telethon(session)
+            await log_session(user_id, phone, "Pyro→Tele")
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b><b> تم التحويل بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> الرقم: <code>{phone}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>\n\n"
+            text += f"<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> جلسة تليثون: </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n"
+            text += f"<code>{new_session}</code>"
+
+            keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ خطأ في التحويل: {str(e)}</b>", parse_mode='HTML')
+            await set_user_state(user_id, username, None)
+
+# ========== الأزرار ==========
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    username = query.from_user.username
+    data = query.data
+
+    if data == "back_main":
+        await start(update, context)
+
+    elif data == "extract_telethon":
+        await set_user_state(user_id, username, "awaiting_phone_telethon")
+        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل رقم الهاتف مع كود الدولة </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
+        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> مثال: +201234567890 </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
+        await query.message.edit_text(text, parse_mode='HTML')
+
+    elif data == "extract_pyro":
+        await set_user_state(user_id, username, "awaiting_phone_pyro")
+        text = "<b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b><b> ارسل رقم الهاتف مع كود الدولة </b><b><tg-emoji emoji-id='5798941981224737816'>🚀</tg-emoji></b>\n\n"
+        text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> مثال: +201234567890 </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
+        await query.message.edit_text(text, parse_mode='HTML')
+
+    elif data == "tele_to_pyro":
+        await set_user_state(user_id, username, "awaiting_tele_session")
+        text = "<b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b><b> ارسل جلسة تليثون للتحويل </b><b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b>"
+        await query.message.edit_text(text, parse_mode='HTML')
+
+    elif data == "pyro_to_tele":
+        await set_user_state(user_id, username, "awaiting_pyro_session")
+        text = "<b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b><b> ارسل جلسة بايوجرام للتحويل </b><b><tg-emoji emoji-id='5794353922816429699'>⚡</tg-emoji></b>"
+        await query.message.edit_text(text, parse_mode='HTML')
+
+    elif data == "my_stats":
+        async with aiosqlite.connect("bot.db") as db:
+            async with db.execute("SELECT sessions_count FROM users WHERE user_id=?", (user_id,)) as cur:
+                row = await cur.fetchone()
+                count = row[0] if row else 0
+        text = f"<b><tg-emoji emoji-id='5798740083085231609'>📊</tg-emoji></b><b> إحصائياتك </b><b><tg-emoji emoji-id='5798740083085231609'>📊</tg-emoji></b>\n\n"
+        text += f"<b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b><b> عدد الجلسات المستخرجة: <code>{count}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🎲</tg-emoji></b>"
+        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]]
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+
+    elif data == "admin_panel" and user_id == ADMIN_ID:
+        async with aiosqlite.connect("bot.db") as db:
+            async with db.execute("SELECT COUNT(*) FROM users") as cur:
+                users_count = (await cur.fetchone())[0]
+            async with db.execute("SELECT COUNT(*) FROM sessions_log") as cur:
+                sessions_count = (await cur.fetchone())[0]
+
+        text = "<b><tg-emoji emoji-id='5798740083085231609'>⚙️</tg-emoji></b><b> لوحة الأدمن </b><b><tg-emoji emoji-id='5798740083085231609'>⚙️</tg-emoji></b>\n\n"
+        text += f"<b><tg-emoji emoji-id='5794353922816429699'>👥</tg-emoji></b><b> عدد المستخدمين: <code>{users_count}</code> </b><b><tg-emoji emoji-id='5794353922816429699'>👥</tg-emoji></b>\n"
+        text += f"<b><tg-emoji emoji-id='5796526727840669257'>🔐</tg-emoji></b><b> عدد الجلسات: <code>{sessions_count}</code> </b><b><tg-emoji emoji-id='5796526727840669257'>🔐</tg-emoji></b>\n"
+        text += f"<b><tg-emoji emoji-id='5798482080421649554'>📱</tg-emoji></b><b> اسم الجهاز: <code>{DEVICE_NAME}</code> </b><b><tg-emoji emoji-id='5798482080421649554'>📱</tg-emoji></b>"
+
+        keyboard = [
+            [InlineKeyboardButton("📥 تصدير النسخ الاحتياطي", callback_data="export_backup")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+        ]
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+
+    elif data == "export_backup" and user_id == ADMIN_ID:
+        async with aiosqlite.connect("bot.db") as db:
+            async with db.execute("SELECT * FROM sessions_log ORDER BY id DESC LIMIT 50") as cur:
+                rows = await cur.fetchall()
+
+        backup_text = "<b>📦 آخر 50 جلسة مستخرجة</b>\n\n"
+        for row in rows:
+            backup_text += f"<code>{row[2]}</code> - {row[3]} - {row[4][:10]}\n"
+
+        await query.message.reply_text(backup_text, parse_mode='HTML')
+
 # ========== تشغيل البوت ==========
+app = None
+
 def main():
+    global app
     print("Bot Started...")
     app = Application.builder().token(TOKEN).build()
-    
+
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.ALL, handle_message))
-    
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
