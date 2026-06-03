@@ -382,7 +382,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             await update.message.reply_text("<b>❌ الصيغة غلط</b>", parse_mode='HTML')
     
-    # إنشاء أرقام
     elif user_id == ADMIN_ID and state and state.startswith("creating_nums_"):
         country_code = state.split("_")[2]
         lines = update.message.text.strip().split("\n")
@@ -392,15 +391,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     number, price = line.split("|")
                     await db.execute("INSERT INTO numbers (country_code, number, price) VALUES (?,?,?)", 
-                                     (country_code, number.strip(), float(price.replace("$",""))))
+                                     (country_code, number.strip(), float(price.replace("$", ""))))
                     added += 1
-                except: pass
+                except:
+                    pass
             await db.commit()
         await update_country_count()
         await set_user_state(user_id, None)
         text = f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم إنشاء {added} رقم </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>"
         await update.message.reply_text(text, parse_mode='HTML')
-        
+    
     elif state and state.startswith("awaiting_code_"):
         num_id = int(state.split("_")[2])
         code = update.message.text.strip()
@@ -412,57 +412,56 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             async with aiosqlite.connect("bot.db") as db:
                 await db.execute("UPDATE numbers SET session_string=?, status='active' WHERE id=?", (new_session, num_id))
                 await db.commit()
-                
-                text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الدخول بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
-                text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-                text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> تسجيل خروج من كل الجلسات؟ </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-                
-                keyboard = [
-                    [InlineKeyboardButton("✅ نعم، سجل خروج", callback_data=f"logout_{num_id}")],
-                    [InlineKeyboardButton("❌ لا، احتفظ بالجلسات", callback_data="back_main")]
-                ]
-                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-                await set_user_state(user_id, None)
-                await client.disconnect()
-                
-            except PhoneCodeInvalidError:
-                await update.message.reply_text("<b>❌ الكود غلط، حاول تاني</b>", parse_mode='HTML')
-            except SessionPasswordNeededError:
-                await set_user_state(user_id, f"awaiting_2fa_{num_id}", temp_data)
-                text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الحساب عليه تحقق بخطوتين </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-                text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> ارسل باسورد التحقق بخطوتين </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
-                await update.message.reply_text(text, parse_mode='HTML')
-            except FloodWaitError as e:
-                await update.message.reply_text(f"<b>❌ لازم تستنى {e.seconds} ثانية</b>", parse_mode='HTML')
-            except Exception as e:
-                await update.message.reply_text(f"<b>❌ خطأ: {str(e)}</b>", parse_mode='HTML')
-        
-        # إدخال باسورد 2FA
-        elif state and state.startswith("awaiting_2fa_"):
-            num_id = int(state.split("_")[2])
-            password = update.message.text.strip()
-            try:
-                client = TelegramClient(StringSession(temp_data['session']), API_ID, API_HASH, device_model="iPhone 17 Pro", system_version="iOS 18.0", app_version="10.14")
-                await client.connect()
-                await client.sign_in(password=password)
-                new_session = client.session.save()
-                async with aiosqlite.connect("bot.db") as db:
-                    await db.execute("UPDATE numbers SET session_string=?, status='active' WHERE id=?", (new_session, num_id))
-                    await db.commit()
-                
-                text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الدخول بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
-                text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
-                text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> تسجيل خروج من كل الجلسات؟ </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
-                
-                keyboard = [
-                    [InlineKeyboardButton("✅ نعم، سجل خروج", callback_data=f"logout_{num_id}")],
-                    [InlineKeyboardButton("❌ لا", callback_data="back_main")]
-                ]
-                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-                await set_user_state(user_id, None)
-                await client.disconnect()
-            except Exception as e:
-                await update.message.reply_text(f"<b>❌ الباسورد غلط: {str(e)}</b>", parse_mode='HTML')
+            
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الدخول بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
+            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
+            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> تسجيل خروج من كل الجلسات؟ </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
+            
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، سجل خروج", callback_data=f"logout_{num_id}")],
+                [InlineKeyboardButton("❌ لا، احتفظ بالجلسات", callback_data="back_main")]
+            ]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, None)
+            await client.disconnect()
+            
+        except PhoneCodeInvalidError:
+            await update.message.reply_text("<b>❌ الكود غلط، حاول تاني</b>", parse_mode='HTML')
+        except SessionPasswordNeededError:
+            await set_user_state(user_id, f"awaiting_2fa_{num_id}", temp_data)
+            text = "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> الحساب عليه تحقق بخطوتين </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
+            text += "<b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b><b> ارسل باسورد التحقق بخطوتين </b><b><tg-emoji emoji-id='5796499583647359561'>📌</tg-emoji></b>"
+            await update.message.reply_text(text, parse_mode='HTML')
+        except FloodWaitError as e:
+            await update.message.reply_text(f"<b>❌ لازم تستنى {e.seconds} ثانية</b>", parse_mode='HTML')
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ خطأ: {str(e)}</b>", parse_mode='HTML')
+    
+    elif state and state.startswith("awaiting_2fa_"):
+        num_id = int(state.split("_")[2])
+        password = update.message.text.strip()
+        try:
+            client = TelegramClient(StringSession(temp_data['session']), API_ID, API_HASH, device_model="iPhone 17 Pro", system_version="iOS 18.0", app_version="10.14")
+            await client.connect()
+            await client.sign_in(password=password)
+            new_session = client.session.save()
+            async with aiosqlite.connect("bot.db") as db:
+                await db.execute("UPDATE numbers SET session_string=?, status='active' WHERE id=?", (new_session, num_id))
+                await db.commit()
+            
+            text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الدخول بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
+            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
+            text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> تسجيل خروج من كل الجلسات؟ </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>"
+            
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، سجل خروج", callback_data=f"logout_{num_id}")],
+                [InlineKeyboardButton("❌ لا", callback_data="back_main")]
+            ]
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+            await set_user_state(user_id, None)
+            await client.disconnect()
+        except Exception as e:
+            await update.message.reply_text(f"<b>❌ الباسورد غلط: {str(e)}</b>", parse_mode='HTML')
         
         # استقبال سكرين الدفع
         elif state == "awaiting_payment_proof":
