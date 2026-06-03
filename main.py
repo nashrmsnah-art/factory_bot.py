@@ -690,17 +690,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ========== تشغيل البوت ==========
 def main():
+    print("Bot Started...")
     app = Application.builder().token(TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_message))
+    app.add_handler(MessageHandler(filters.ALL, handle_message))
     
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(init_db())
-    print("Bot Started...")
-    app.run_polling()
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
+    asyncio.run(init_db())
     main()
