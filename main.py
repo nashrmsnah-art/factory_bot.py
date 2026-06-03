@@ -9,12 +9,12 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # ========== الإعدادات ==========
-TOKEN = os.environ.get("TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
-API_ID = int(os.environ.get("API_ID", 0))
-API_HASH = os.environ.get("API_HASH")
+TOKEN = "8989441675:AAFwZASe8g4JwM33KSXCHybZpO-vF6SPSDk" # حط التوكن بتاعك هنا
+ADMIN_ID = 29449730  # حط الايدي بتاعك هنا
+API_ID = 37879014    # حط api_id بتاعك
+API_HASH = "db129fe3286650ad869b2891abd72df2" # حط api_hash بتاعك
 DEV_USERNAME = "aabdulrahmaan"
-DEVICE_NAME = "iPhone 17 pro" # اسم الجلسة
+DEVICE_NAME = "iPhone 17 pro"
 
 # ========== قاعدة البيانات ==========
 async def init_db():
