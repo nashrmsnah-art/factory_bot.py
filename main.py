@@ -242,7 +242,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             me = await t_client.get_me()
             phone = me.phone
+            # خد الداتا قبل ما تقفل الكلاينت
+            dc_id = t_client.session.dc_id
+            auth_key = t_client.session.auth_key
+            user_id = me.id
+            is_bot = me.bot
             await t_client.disconnect()
+
+            p_client = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
+            await p_client.connect()
+            # التعديل هنا: شيلنا await
+            await p_client.storage.set_dc(dc_id)
+            await p_client.storage.set_auth_key(auth_key)
+            await p_client.storage.set_user_id(user_id)
+            await p_client.storage.set_is_bot(is_bot)
+            pyro_session = await p_client.export_session_string()
+            await p_client.disconnect()
+
+            await update.message.reply_text(f"✅ <b>تم التحويل بنجاح</b>\n\n<code>{pyro_session}</code>", parse_mode='HTML')
+            await log_session(user_id, phone, "Telethon → Pyrogram")
+            await set_user_state(user_id, username, None)
+        except Exception as e:
+            await update.message.reply_text(f"❌ خطأ في التحويل: {e}")
+            await set_user_state(user_id, username, None)
 
             p_client = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
             await p_client.connect()
