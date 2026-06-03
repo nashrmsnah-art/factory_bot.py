@@ -336,12 +336,12 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # امسح اي Webhook قديم واي رسايل متعلقة
     await app.bot.delete_webhook(drop_pending_updates=True)
-    print("Starting polling...")
+    print("Webhook deleted, Starting polling...")
+    
     await app.initialize()
     await app.start()
     await app.updater.start_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
     await asyncio.Event().wait()
-
-if __name__ == "__main__":
-    asyncio.run(main())
