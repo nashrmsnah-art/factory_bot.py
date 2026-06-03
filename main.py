@@ -15,10 +15,10 @@ logging.basicConfig(
 )
 
 # ========== الإعدادات - حط بياناتك هنا ==========
-TOKEN = "حط_التوكن_هنا"
-ADMIN_ID = 123456789  # حط ايديك
-API_ID = 12345678     # حط api_id
-API_HASH = "حط_الهاش_هنا"
+TOKEN = "8989441675:AAFwZASe8g4JwM33KSXCHybZpO-vF6SPSDk" # حط التوكن بتاعك هنا
+ADMIN_ID = 29449730  # حط الايدي بتاعك هنا
+API_ID = 37879014    # حط api_id بتاعك
+API_HASH = "db129fe3286650ad869b2891abd72df2" # حط api_hash بتاعك
 DEV_USERNAME = "aabdulrahmaan"
 DEVICE_NAME = "iPhone 17 pro"
 
