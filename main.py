@@ -400,17 +400,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await set_user_state(user_id, None)
         text = f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم إنشاء {added} رقم </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>"
         await update.message.reply_text(text, parse_mode='HTML')
-        elif state and state.startswith("awaiting_code_"):
-            num_id = int(state.split("_")[2])
-            code = update.message.text.strip()
-            try:
-                client = TelegramClient(StringSession(temp_data['session']), API_ID, API_HASH, device_model="iPhone 17 Pro", system_version="iOS 18.0", app_version="10.14")
-                await client.connect()
-                await client.sign_in(phone=temp_data['phone'], code=code, phone_code_hash=temp_data['hash'])
-                new_session = client.session.save()
-                async with aiosqlite.connect("bot.db") as db:
-                    await db.execute("UPDATE numbers SET session_string=?, status='active' WHERE id=?", (new_session, num_id))
-                    await db.commit()
+        
+    elif state and state.startswith("awaiting_code_"):
+        num_id = int(state.split("_")[2])
+        code = update.message.text.strip()
+        try:
+            client = TelegramClient(StringSession(temp_data['session']), API_ID, API_HASH, device_model="iPhone 17 Pro", system_version="iOS 18.0", app_version="10.14")
+            await client.connect()
+            await client.sign_in(phone=temp_data['phone'], code=code, phone_code_hash=temp_data['hash'])
+            new_session = client.session.save()
+            async with aiosqlite.connect("bot.db") as db:
+                await db.execute("UPDATE numbers SET session_string=?, status='active' WHERE id=?", (new_session, num_id))
+                await db.commit()
                 
                 text = "<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم تسجيل الدخول بنجاح </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>\n\n"
                 text += "<b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b><b> اسم الجلسة: iPhone 17 Pro </b><b><tg-emoji emoji-id='5798482080421649554'>🔒</tg-emoji></b>\n\n"
