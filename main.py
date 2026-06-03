@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 
 # ========== الإعدادات - حط بياناتك هنا ==========
-TOKEN = "8989441675:AAFwZASe8g4JwM33KSXCHybZpO-vF6SPSDk" # حط التوكن بتاعك هنا
+TOKEN = "8917859065:AAH0RlZ87TeAPk1D0qI0DPtZNOhAa8KlvjQ" # حط التوكن بتاعك هنا
 ADMIN_ID = 29449730  # حط الايدي بتاعك هنا
 API_ID = 37879014    # حط api_id بتاعك
 API_HASH = "db129fe3286650ad869b2891abd72df2" # حط api_hash بتاعك
