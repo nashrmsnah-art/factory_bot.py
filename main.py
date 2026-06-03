@@ -105,7 +105,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== تشغيل البوت ==========
 app = None
 
-def main():
+async def main():
     global app
     print("Bot Started...")
     print(f"TOKEN: {TOKEN[:10]}...")
@@ -116,12 +116,17 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # امسح Webhook اجباري
-    app.bot.delete_webhook(drop_pending_updates=True)
+    # لازم await عشان دي async
+    await app.bot.delete_webhook(drop_pending_updates=True)
     print("Webhook deleted, starting polling...")
     
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    # شغل البوت
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    
+    # خلي البوت شغال
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    asyncio.run(init_db())
-    main()
+    asyncio.run(main())
