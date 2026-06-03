@@ -400,8 +400,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await set_user_state(user_id, None)
         text = f"<b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b><b> تم إنشاء {added} رقم </b><b><tg-emoji emoji-id='5794353922816429699'>🛡️</tg-emoji></b>"
         await update.message.reply_text(text, parse_mode='HTML')
-    
-    # إدخال الكود
         # إدخال الكود
         elif state and state.startswith("awaiting_code_"):
             num_id = int(state.split("_")[2])
